@@ -8,7 +8,7 @@
 
 桌面应用使用 Tauri 2.0，提供金价查看与监控体验。可按需求增加系统托盘、桌面通知和本地偏好设置。用户与监控配置通过 API 服务访问；金价按 API 下发的 URL 获取，可能来自 API 服务或外部数据源。本地只保存必要的设置或缓存。
 
-首批目标操作系统为 Windows 和 macOS，使用 Tauri 更新机制。桌面前端框架、语言、更新签名与发布配置尚待确定，选型后写入本项目 README。
+首批目标操作系统为 Windows 和 macOS，桌面前端采用 Vite + TypeScript（原生 DOM）。计划使用 Tauri 更新机制，更新签名与发布配置尚待确定；开发与构建命令见 [desktop/README.md](../desktop/README.md)。
 
 ## 建议目录结构
 

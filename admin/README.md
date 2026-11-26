@@ -1,6 +1,6 @@
 # 金价监控管理后台
 
-Vue 3 + TypeScript + Vite + Element Plus + Vue Router 的基础工程。Element Plus 按使用的组件与样式导入。依赖版本在 `package.json` 中固定，并由 `package-lock.json` 锁定依赖树。当前提供管理员登录、用户管理、支付记录查询与商品管理页面，按 API v1 契约请求服务端。
+Vue 3 + TypeScript + Vite + Element Plus + Vue Router 的基础工程。Element Plus 在应用入口统一注册并加载样式。依赖版本在 `package.json` 中固定，并由 `package-lock.json` 锁定依赖树。当前提供管理员登录、用户管理、支付记录查询与商品管理页面，按 API v1 契约请求服务端。
 
 ## 开发
 

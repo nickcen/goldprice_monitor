@@ -30,9 +30,18 @@ export function chartSvg(points: PricePoint[]): string {
   if (values.some(value => !Number.isFinite(value))) return '<p class="chart-empty">价格记录无法绘图</p>';
   const min = Math.min(...values), max = Math.max(...values), spread = max - min || 1;
   const minuteValue = (minute: string) => Number(minute.slice(0, 2)) * 60 + Number(minute.slice(3));
-  const coordinates = points.map((point, i) => ({ x: 36 + minuteValue(point.minute) / 1439 * 624, y: 152 - (values[i] - min) / spread * 116 }));
+  const minutes = points.map(point => minuteValue(point.minute));
+  const firstMinute = Math.min(...minutes), lastMinute = Math.max(...minutes);
+  const timeSpan = lastMinute - firstMinute;
+  const coordinates = points.map((point, i) => ({ x: timeSpan ? 76 + (minutes[i] - firstMinute) / timeSpan * 584 : 368, y: 152 - (values[i] - min) / spread * 116 }));
   const polyline = coordinates.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
   const dots = coordinates.map(({ x, y }, i) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${points.length === 1 ? 5 : 3}"><title>${escape(points[i].minute)} · ${escape(points[i].price)}</title></circle>`).join('');
-  return `<svg class="price-chart" viewBox="0 0 700 190" role="img" aria-label="当天价格折线图，从 ${escape(points[0].minute)} 到 ${escape(points[points.length - 1].minute)}"><line x1="36" y1="152" x2="660" y2="152"/><polyline points="${polyline}"/>${dots}<text x="36" y="182">00:00</text><text x="618" y="182">23:59</text></svg><div class="chart-range"><span>最低 ${min}</span><span>最高 ${max}</span></div>`;
+  const firstTime = points[minutes.indexOf(firstMinute)].minute;
+  const lastTime = points[minutes.indexOf(lastMinute)].minute;
+  const ticks = max === min ? [{ value: min, y: 152 }] : [
+    { value: max, y: 36 }, { value: (min + max) / 2, y: 94 }, { value: min, y: 152 },
+  ];
+  const priceAxis = ticks.map(({ value, y }) => `<line class="price-grid" x1="76" y1="${y}" x2="660" y2="${y}"/><text class="price-tick" x="68" y="${y + 4}" text-anchor="end">${value.toFixed(2)}</text>`).join('');
+  return `<svg class="price-chart" viewBox="0 0 700 190" role="img" aria-label="当天价格折线图，从 ${escape(firstTime)} 到 ${escape(lastTime)}">${priceAxis}<polyline points="${polyline}"/>${dots}<text x="76" y="182">${escape(firstTime)}</text><text x="660" y="182" text-anchor="end">${escape(lastTime)}</text></svg>`;
 }

@@ -60,11 +60,29 @@ fn clear_token() -> Result<(), String> {
     }
 }
 #[tauri::command]
-fn tray_status(app: tauri::AppHandle, status: String) -> Result<(), String> {
+fn tray_status(app: tauri::AppHandle, status: String, trend: Option<String>) -> Result<(), String> {
     let tray = app.tray_by_id("main").ok_or("托盘未就绪")?;
     tray.set_tooltip(Some(format!("金价监控 · {}", status))).map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
-    tray.set_title(Some(status)).map_err(|e| e.to_string())?;
+    {
+        tray.set_title(Some(status.clone())).map_err(|e| e.to_string())?;
+        if matches!(trend.as_deref(), Some("up" | "down")) {
+            tray.with_inner_tray_icon(move |inner| {
+                use objc2::{runtime::AnyObject, AnyThread, MainThreadMarker};
+                use objc2_app_kit::{NSColor, NSForegroundColorAttributeName};
+                use objc2_foundation::{NSAttributedString, NSDictionary, NSString};
+                if let Some(item) = inner.ns_status_item() {
+                    let color = if trend.as_deref() == Some("up") { NSColor::systemRedColor() } else { NSColor::systemGreenColor() };
+                    let attrs: objc2::rc::Retained<NSDictionary<objc2_foundation::NSAttributedStringKey, AnyObject>> =
+                        NSDictionary::from_slices(&[unsafe { NSForegroundColorAttributeName }], &[color.as_ref()]);
+                    let title = unsafe { NSAttributedString::initWithString_attributes(NSAttributedString::alloc(), &NSString::from_str(&status), Some(&attrs)) };
+                    if let Some(button) = item.button(MainThreadMarker::new().expect("tray callback runs on the main thread")) {
+                        button.setAttributedTitle(&title);
+                    }
+                }
+            }).map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 #[tauri::command]

@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    default: local
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -26,12 +28,10 @@ management:
       exposure:
         include: health
 app:
-  jwt-secret: ${APP_JWT_SECRET:3dhReWTZ8yCJGSOaUlNjSlhBWUdOJ5jI}
   admin-username: ${APP_ADMIN_USERNAME:}
   admin-password: ${APP_ADMIN_PASSWORD:}
   price-source-url: ${APP_PRICE_SOURCE_URL:https://coinapi.gcsgcs.com/api/Accumulate/GetRealTimeGoldPrice}
   currency: ${APP_CURRENCY:CNY}
   unit: ${APP_PRICE_UNIT:gram}
   monitor-interval-seconds: ${APP_MONITOR_INTERVAL_SECONDS:60}
-  public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8080}
   desktop-origins: ${APP_DESKTOP_ORIGINS:tauri://localhost,http://tauri.localhost,http://127.0.0.1:1420,http://127.0.0.1:5173,http://localhost:5173}

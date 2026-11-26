@@ -18,3 +18,8 @@ keyring = { version = "3", features = ["apple-native", "windows-native"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSColor", "NSStatusItem", "NSAttributedString"] }
+objc2-foundation = { version = "0.3", features = ["NSAttributedString", "NSDictionary", "NSString"] }

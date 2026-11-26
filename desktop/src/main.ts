@@ -5,7 +5,7 @@ import { fetchGoldPrice } from './api/goldPrice';
 import { Session } from './state/session';
 import { Monitor, compareDecimal } from './state/monitor';
 import { notify, trayStatus } from './platform/desktop';
-import { chartSvg, loadPoints, localDay, prunePoints, savePoint, type PricePoint } from './history';
+import { chartSvg, loadPoints, localDay, localMinute, prunePoints, savePoint, type PricePoint } from './history';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing app element');
@@ -18,23 +18,42 @@ let config: Config | null = null;
 let configRequest = 0;
 let price: GoldPrice | undefined;
 let priceError: string | null = null;
+let trayUpdate = 0;
 let points: PricePoint[] = [];
 let historyError = '';
 let historyDay = localDay();
 let configError: string | null = null;
 let message = '';
-let page: 'login' | 'register' | 'home' | 'account' = 'login';
+let page: 'restoring' | 'login' | 'register' | 'home' | 'account' = setupError ? 'login' : 'restoring';
 const request = <T>(path: string, options: { method?: string; body?: unknown; token?: string } = {}) => {
   if (!api) throw new Error(setupError);
   return api.request<T>(path, options);
 };
-const session = new Session(request, () => { configRequest++; monitor.stop(); config = null; price = undefined; points = []; page = 'login'; void trayStatus('未登录'); render(); });
+const session = new Session(request, () => { configRequest++; trayUpdate++; monitor.stop(); config = null; price = undefined; points = []; page = 'login'; void trayStatus('未登录'); render(); });
 const monitor = new Monitor(
   () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config, path => authorized<GoldPrice>(path)); },
-  (nextPrice, error) => { price = nextPrice; priceError = error; void trayStatus(nextPrice ? `${formatPrice(nextPrice.price)} ${nextPrice.currency}/${nextPrice.unit}${error ? '（非最新）' : ''}` : '获取中'); if (page === 'home') render(); },
+  (nextPrice, error) => { price = nextPrice; priceError = error; void updateTray(nextPrice, error); if (page === 'home') render(); },
   (nextPrice, threshold, direction) => { void notify('金价监控提醒', `当前金价 ${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}，${direction === 'low' ? '低于' : '高于'}阈值 ${formatPrice(threshold)}`).catch(() => { message = '系统通知不可用，请检查通知权限'; render(); }); },
   nextPrice => { void savePoint(nextPrice).then(() => refreshHistory()).catch(error => { historyError = errorText(error); if (page === 'home') render(); }); },
 );
+async function updateTray(nextPrice: GoldPrice | undefined, error: string | null): Promise<void> {
+  const update = ++trayUpdate;
+  if (!nextPrice) { await trayStatus('获取中'); return; }
+  let trend: 'up' | 'down' | null = null;
+  if (!error && config) {
+    try {
+      const now = new Date();
+      const previous = new Date(now.getTime() - 60_000);
+      const rows = await loadPoints(config, previous);
+      const point = rows.find(row => row.minute === localMinute(previous));
+      if (point) {
+        const comparison = compareDecimal(nextPrice.price, point.price);
+        trend = comparison > 0 ? 'up' : comparison < 0 ? 'down' : null;
+      }
+    } catch { /* Keep the price visible if history is unavailable. */ }
+  }
+  if (update === trayUpdate) await trayStatus(`${formatPrice(nextPrice.price)}${error ? '（非最新）' : ''}`, trend);
+}
 async function refreshHistory(): Promise<void> {
   if (!config) return;
   const day = localDay();
@@ -62,6 +81,7 @@ function formatDataTime(value: string): string {
 function errorText(error: unknown): string { return error instanceof ApiError && error.response && typeof error.response === 'object' && 'message' in error.response ? String(error.response.message) : error instanceof Error ? error.message : '操作失败'; }
 function render(): void {
   if (setupError) { root.innerHTML = `<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>需要配置 API</h1><p role="alert">${escape(setupError)}</p></main>`; return; }
+  if (page === 'restoring') { root.innerHTML = '<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>正在恢复登录…</h1></main>'; return; }
   if (page === 'login' || page === 'register') {
     root.innerHTML = `<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>${page === 'login' ? '登录' : '注册'}</h1><p>实时关注金价变化</p><form id="auth-form"><label>手机号<input name="phone" type="tel" required autocomplete="tel" placeholder="13800138000"></label><label>密码<input name="password" type="password" required minlength="8" autocomplete="${page === 'login' ? 'current-password' : 'new-password'}"></label>${page === 'register' ? '<label>确认密码<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label>' : ''}<button type="submit">${page === 'login' ? '登录' : '注册'}</button></form><button class="link" id="switch">${page === 'login' ? '没有账号？注册' : '已有账号？登录'}</button><div class="message" role="status">${escape(message)}</div></main>`;
     root.querySelector('#switch')?.addEventListener('click', () => { page = page === 'login' ? 'register' : 'login'; message = ''; render(); });
@@ -126,4 +146,4 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) void
 async function resume(): Promise<void> { await session.check(); if (session.token && (page === 'home' || page === 'account')) { await loadConfig(); await maintainHistory(); } }
 void trayStatus('未登录');
 render();
-if (!setupError) void session.restore().then(ok => { if (ok) { page = 'home'; void loadConfig(); } else render(); }).catch(() => { message = '无法读取系统凭据，请检查钥匙串权限'; render(); });
+if (!setupError) void session.restore().then(ok => { page = ok ? 'home' : 'login'; if (ok) void loadConfig(); else render(); }).catch(() => { page = 'login'; message = '无法读取系统凭据，请检查钥匙串权限'; render(); });

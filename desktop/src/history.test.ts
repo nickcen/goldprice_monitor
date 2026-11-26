@@ -30,3 +30,13 @@ it('renders empty, single point and multi point chart states', () => {
   expect(chartSvg([{ minute: '10:00', price: '500' }])).toContain('<circle');
   expect(chartSvg([{ minute: '10:00', price: '500' }, { minute: '11:00', price: '510' }])).toContain('<polyline');
 });
+
+it('spreads recorded times across the chart and labels the actual range', () => {
+  const svg = chartSvg([{ minute: '09:30', price: '767' }, { minute: '16:40', price: '768' }, { minute: '23:50', price: '767.5' }]);
+  expect(svg).toContain('points="76.0,152.0 368.0,36.0 660.0,94.0"');
+  expect(svg).toContain('>768.00</text>');
+  expect(svg).toContain('>767.50</text>');
+  expect(svg).toContain('>767.00</text>');
+  expect(svg).toContain('>09:30</text>');
+  expect(svg).toContain('>23:50</text>');
+});

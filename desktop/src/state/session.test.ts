@@ -1,11 +1,30 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from './session';
 import type { AuthToken } from '../api/contracts';
+import { ApiError } from '../api/client';
 
-vi.mock('../platform/desktop', () => ({ readToken: async () => null, saveToken: async () => {}, clearToken: async () => {} }));
+const stored = vi.hoisted(() => ({ token: null as string | null }));
+vi.mock('../platform/desktop', () => ({ readToken: async () => stored.token, saveToken: async (token: string) => { stored.token = token; }, clearToken: async () => { stored.token = null; } }));
+beforeEach(() => { stored.token = null; });
 const auth = (token: string): AuthToken => ({ token, role: 'USER', userId: 1, expiresAt: new Date(Date.now() + 7_200_000).toISOString() });
 
 describe('session refresh', () => {
+  it('restores a cached token after validating it with the API', async () => {
+    stored.token = 'cached-jwt';
+    const request = vi.fn(async () => ({ expiresAt: new Date(Date.now() + 7_200_000).toISOString() }));
+    const session = new Session(request as unknown as ConstructorParameters<typeof Session>[0], vi.fn());
+    expect(await session.restore()).toBe(true);
+    expect(request).toHaveBeenCalledWith('/api/v1/auth/session', { token: 'cached-jwt' });
+    expect(session.token).toBe('cached-jwt');
+    await session.logout();
+  });
+  it('clears a rejected cached token so login can be shown', async () => {
+    stored.token = 'expired-jwt';
+    const session = new Session(async () => { throw new ApiError(401, {}); }, vi.fn());
+    expect(await session.restore()).toBe(false);
+    expect(session.token).toBeNull();
+    expect(stored.token).toBeNull();
+  });
   it('coalesces simultaneous refreshes and keeps the new token', async () => {
     let resolveRefresh!: (value: AuthToken) => void;
     const pending = new Promise<AuthToken>(resolve => { resolveRefresh = resolve; });

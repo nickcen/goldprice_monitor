@@ -5,7 +5,7 @@ import { sendNotification, isPermissionGranted, requestPermission } from '@tauri
 export async function readToken(): Promise<string | null> { return isTauri() ? invoke<string | null>('read_token') : null; }
 export async function saveToken(token: string): Promise<void> { if (isTauri()) await invoke('save_token', { token }); }
 export async function clearToken(): Promise<void> { if (isTauri()) await invoke('clear_token'); }
-export async function trayStatus(status: string): Promise<void> { if (isTauri()) await invoke('tray_status', { status }); }
+export async function trayStatus(status: string, trend: 'up' | 'down' | null = null): Promise<void> { if (isTauri()) await invoke('tray_status', { status, trend }); }
 export async function notify(title: string, body: string): Promise<void> {
   if (!isTauri()) return;
   let allowed = await isPermissionGranted();

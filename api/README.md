@@ -4,7 +4,7 @@ Java 21、Spring Boot 3.5.6、MyBatis Spring Boot Starter 3.0.5、MySQL Connecto
 
 ## 环境
 
-安装 JDK 21、Maven 3.9+ 和 MySQL 8.0。创建 `goldprice_monitor` 数据库及权限受限的应用用户。连接参数通过环境变量提供，不要提交真实凭据。可参考 `.env.example`；该文件不会被应用自动加载。
+安装 JDK 21、Maven 3.9+ 和 MySQL 8.0。创建 `goldprice_monitor` 数据库及权限受限的应用用户。默认启用 `local` profile，配置见 `application-local.yml`；本地连接参数可通过环境变量覆盖。可参考 `.env.example`；该文件不会被应用自动加载。生产环境由 systemd 设置 `SPRING_PROFILES_ACTIVE=prod`，读取 `application-prod.yml`，并通过 `/etc/goldprice-monitor.env` 提供数据库与 JWT 密钥，不要提交真实凭据。
 
 | 变量 | 用途 | 开发默认值 |
 | --- | --- | --- |

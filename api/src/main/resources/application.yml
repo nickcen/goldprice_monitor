@@ -18,3 +18,12 @@ management:
     web:
       exposure:
         include: health
+app:
+  jwt-secret: ${APP_JWT_SECRET:}
+  admin-username: ${APP_ADMIN_USERNAME:}
+  admin-password: ${APP_ADMIN_PASSWORD:}
+  price-source-url: ${APP_PRICE_SOURCE_URL:}
+  currency: ${APP_CURRENCY:CNY}
+  unit: ${APP_PRICE_UNIT:gram}
+  monitor-interval-seconds: ${APP_MONITOR_INTERVAL_SECONDS:60}
+  public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8080}

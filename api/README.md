@@ -30,3 +30,7 @@ mvn spring-boot:run
 首次运行需要空数据库。如果现有数据库已经手动建了表，请先核对其结构与 V1 一致，并制定基线方案；当前配置关闭自动基线，不会跳过已有表。测试中的 HTTP 健康检查显式关闭 Flyway，以免依赖外部 MySQL。
 
 尚未定义业务 API，因此没有添加空的 controller、service 或 mapper。
+
+## Business API
+
+See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret of at least 32 characters before startup. Set `APP_ADMIN_USERNAME` and `APP_ADMIN_PASSWORD` together to create an initial admin account if it does not exist; changing these environment values does not reset an existing password. Configure `APP_PRICE_SOURCE_URL` to a trusted JSON price endpoint. `APP_CURRENCY` (default `CNY`), `APP_PRICE_UNIT` (default `gram`), `APP_MONITOR_INTERVAL_SECONDS` (default 60), and `APP_PUBLIC_BASE_URL` (default `http://localhost:8080`) control the initial user configuration. `DB_URL`, `DB_USER`, and `DB_PASSWORD` configure MySQL. No production price source or admin credentials are committed.

@@ -1,0 +1,125 @@
+openapi: 3.0.3
+info:
+  title: Gold Price Monitor API
+  version: 1.0.0
+  description: Field definitions and error codes are documented in api/API_CONTRACT.md.
+servers:
+  - url: /api/v1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}
+    Token:
+      type: object
+      required: [token, expiresAt, role, userId]
+      properties:
+        token: {type: string}
+        expiresAt: {type: string, format: date-time}
+        role: {type: string, enum: [USER, ADMIN]}
+        userId: {type: integer}
+    Page:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: {type: array, items: {type: object}}
+        page: {type: integer, minimum: 1}
+        pageSize: {type: integer, example: 10}
+        total: {type: integer}
+        totalPages: {type: integer}
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [phone, password], properties: {phone: {type: string}, password: {type: string}}}}}}
+      responses: {'200': {description: Registered user}, '400': {description: Invalid parameter}, '409': {description: Phone exists}}
+  /auth/login:
+    post:
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [phone, password], properties: {phone: {type: string}, password: {type: string}}}}}}
+      responses: {'200': {description: Signed token, content: {application/json: {schema: {$ref: '#/components/schemas/Token'}}}}, '401': {description: Invalid credentials}}
+  /admin/auth/login:
+    post:
+      security: []
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [username, password], properties: {username: {type: string}, password: {type: string}}}}}}
+      responses: {'200': {description: Signed admin token, content: {application/json: {schema: {$ref: '#/components/schemas/Token'}}}}, '401': {description: Invalid credentials}}
+  /auth/session:
+    get:
+      responses: {'200': {description: Current session}, '401': {description: Unauthorized}}
+  /auth/refresh:
+    post:
+      responses: {'200': {description: Rotated token, content: {application/json: {schema: {$ref: '#/components/schemas/Token'}}}}, '401': {description: Unauthorized}}
+  /auth/logout:
+    post:
+      responses: {'200': {description: Session revoked}, '401': {description: Unauthorized}}
+  /me/config:
+    get:
+      responses: {'200': {description: Current user configuration}, '401': {description: Unauthorized}, '403': {description: Forbidden}}
+    patch:
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {minPrice: {type: number, nullable: true}, maxPrice: {type: number, nullable: true}}}}}}
+      responses: {'200': {description: Saved configuration}, '400': {description: Invalid thresholds}}
+  /gold-price/latest:
+    get:
+      responses: {'200': {description: Latest normalized price}, '503': {description: Source unavailable}}
+  /admin/users:
+    get:
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: phone, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: integer, enum: [0, 1]}}
+      responses: {'200': {description: Paged users}}
+  /admin/users/{id}/password:
+    put:
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [password], properties: {password: {type: string}}}}}}
+      responses: {'200': {description: Password changed}, '404': {description: User missing}}
+  /admin/users/{id}/status:
+    patch:
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status], properties: {status: {type: integer, enum: [0, 1]}}}}}}
+      responses: {'200': {description: Status changed}, '404': {description: User missing}}
+  /admin/users/{id}/validity:
+    patch:
+      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {validFromDate: {type: string, format: date, nullable: true}, validToDate: {type: string, format: date, nullable: true}}}}}}
+      responses: {'200': {description: Dates changed}, '400': {description: Invalid range}, '404': {description: User missing}}
+  /admin/payments:
+    get:
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: userId, in: query, schema: {type: integer}}
+        - {name: paymentNumber, in: query, schema: {type: string}}
+        - {name: createdFrom, in: query, schema: {type: string, format: date-time}}
+        - {name: createdTo, in: query, schema: {type: string, format: date-time}}
+        - {name: paidFrom, in: query, schema: {type: string, format: date-time}}
+        - {name: paidTo, in: query, schema: {type: string, format: date-time}}
+      responses: {'200': {description: Paged payments}}
+  /admin/skus:
+    get:
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1}}
+        - {name: name, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: integer, enum: [0, 1]}}
+      responses: {'200': {description: Paged SKUs}}
+    post:
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [name, price, status, sortOrder], properties: {name: {type: string, maxLength: 120}, price: {type: integer, minimum: 0}, status: {type: integer, enum: [0, 1]}, sortOrder: {type: integer}}}}}}
+      responses: {'201': {description: Created SKU}}
+  /admin/skus/{id}:
+    parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+    get:
+      responses: {'200': {description: SKU}, '404': {description: Missing}}
+    put:
+      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [name, price, status, sortOrder], properties: {name: {type: string}, price: {type: integer}, status: {type: integer}, sortOrder: {type: integer}}}}}}
+      responses: {'200': {description: Updated SKU}}
+    delete:
+      responses: {'200': {description: Deleted}, '409': {description: Referenced by payment}}

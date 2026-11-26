@@ -24,7 +24,7 @@
     </div>
     <el-dialog v-model="statusDialog" title="修改状态" width="420"><el-select v-model="editStatus"><el-option label="可用" :value="1" /><el-option label="不可用" :value="0" /></el-select><template #footer><el-button @click="statusDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveStatus">保存</el-button></template></el-dialog>
     <el-dialog v-model="validityDialog" title="修改有效期" width="480"><el-date-picker v-model="from" value-format="YYYY-MM-DD" placeholder="开始日期" /><el-date-picker v-model="to" value-format="YYYY-MM-DD" placeholder="结束日期" /><template #footer><el-button @click="validityDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveValidity">保存</el-button></template></el-dialog>
-    <el-dialog v-model="passwordDialog" title="修改密码" width="420"><el-input v-model="password" type="password" show-password placeholder="新密码，8–72 位" /><el-input v-model="confirm" type="password" show-password placeholder="确认新密码" /><template #footer><el-button @click="passwordDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="savePassword">保存</el-button></template></el-dialog>
+    <el-dialog v-model="passwordDialog" class="password-dialog" title="修改密码" width="420"><el-input v-model="password" type="password" show-password placeholder="新密码，8–72 位" /><el-input v-model="confirm" type="password" show-password placeholder="确认新密码" /><template #footer><el-button @click="passwordDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="savePassword">保存</el-button></template></el-dialog>
   </div>
 </template>
 <script setup lang="ts">

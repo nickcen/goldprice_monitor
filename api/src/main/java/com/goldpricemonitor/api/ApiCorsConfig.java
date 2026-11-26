@@ -11,7 +11,7 @@ import java.util.Arrays;
 public class ApiCorsConfig implements WebMvcConfigurer {
     private final String[] origins;
 
-    public ApiCorsConfig(@Value("${app.desktop-origins:tauri://localhost,http://tauri.localhost,http://127.0.0.1:1420}") String origins) {
+    public ApiCorsConfig(@Value("${app.desktop-origins:tauri://localhost,http://tauri.localhost,http://127.0.0.1:1420,http://127.0.0.1:5173,http://localhost:5173}") String origins) {
         this.origins = Arrays.stream(origins.split(",")).map(String::trim).filter(value -> !value.isEmpty()).toArray(String[]::new);
     }
 

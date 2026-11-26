@@ -6,7 +6,13 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue()],
     server: {
-      proxy: { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://localhost:8080', changeOrigin: true } },
+      proxy: { '/api': {
+        target: env.VITE_API_PROXY_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'))
+        },
+      } },
     },
   }
 })

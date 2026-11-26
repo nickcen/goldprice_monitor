@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-默认地址为 `http://127.0.0.1:5173`。`VITE_API_BASE_URL` 是公开的 API 基础地址，可留空使用同源请求；不要放入密钥。部署时需将非静态路径回退到 `index.html`，并配置 API 的跨域或同源代理。
+默认地址为 `http://127.0.0.1:5173`。开发时 Vite 将 `/api` 代理到 `VITE_API_PROXY_TARGET`（默认 `http://localhost:8080`），`VITE_API_BASE_URL` 留空即可。不要在变量中放入密钥。部署时需将非静态路径回退到 `index.html`，并配置 `/api` 同源代理或服务端跨域。
 
 ## 检查与构建
 
@@ -26,4 +26,4 @@ npm run preview
 
 ## 管理功能
 
-管理后台提供管理员登录、用户列表与详情（含支付记录）、用户密码/状态/有效期修改、支付记录查询和商品增删改查。API 契约见 `../api/API_CONTRACT.md`。登录令牌存储于当前浏览器标签页的 `sessionStorage`，退出会调用服务端撤销会话并清除本地令牌；401 响应也会清除令牌并跳转登录页。`VITE_API_BASE_URL` 指向 API 服务，例如 `http://localhost:8080`；跨域部署时服务端需配置相应 CORS 或使用同源代理。
+管理后台提供管理员登录、用户列表与详情（含支付记录）、用户密码/状态/有效期修改、支付记录查询和商品增删改查。API 契约见 `../api/API_CONTRACT.md`。登录令牌存储于当前浏览器标签页的 `sessionStorage`，退出会调用服务端撤销会话并清除本地令牌；401 响应也会清除令牌并跳转登录页。`VITE_API_PROXY_TARGET` 是开发代理目标；生产环境优先使用同源 `/api` 代理。若设置 `VITE_API_BASE_URL` 为跨域地址，服务端必须允许相应来源。

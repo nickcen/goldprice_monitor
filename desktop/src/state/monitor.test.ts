@@ -27,4 +27,27 @@ describe('monitor', () => {
     expect(states[1]).toBe('99');
     monitor.stop(); vi.useRealTimers();
   });
+  it('polls immediately and then at the configured interval, stopping cleanly', async () => {
+    vi.useFakeTimers();
+    const fetchPrice = vi.fn(async () => quote('150'));
+    const monitor = new Monitor(fetchPrice, () => {}, () => {});
+    monitor.start({ ...config, monitorIntervalSeconds: 3 });
+    await flush();
+    expect(fetchPrice).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(fetchPrice).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchPrice).toHaveBeenCalledTimes(2);
+    monitor.stop();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(fetchPrice).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+  it('rejects invalid intervals without starting a request', () => {
+    const fetchPrice = vi.fn(async () => quote('150'));
+    const monitor = new Monitor(fetchPrice, () => {}, () => {});
+    expect(() => monitor.start({ ...config, monitorIntervalSeconds: 0 })).toThrow('监控频次必须为正整数秒');
+    expect(() => monitor.start({ ...config, monitorIntervalSeconds: Number.NaN })).toThrow('监控频次必须为正整数秒');
+    expect(fetchPrice).not.toHaveBeenCalled();
+  });
 });

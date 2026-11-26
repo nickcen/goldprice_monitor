@@ -22,6 +22,9 @@ export class Monitor {
   private lastPrice?: GoldPrice;
   constructor(private fetchPrice: () => Promise<GoldPrice>, private onState: (price: GoldPrice | undefined, error: string | null) => void, private onAlert: (price: GoldPrice, threshold: string | number, direction: 'low' | 'high') => void) {}
   start(config: Config): void {
+    if (!Number.isSafeInteger(config.monitorIntervalSeconds) || config.monitorIntervalSeconds <= 0) {
+      throw new Error('监控频次必须为正整数秒');
+    }
     const thresholds = `${config.minPrice ?? ''}|${config.maxPrice ?? ''}`;
     const previousZone = this.lastZone;
     const previousPrice = this.lastPrice;
@@ -31,7 +34,7 @@ export class Monitor {
     if (sameThresholds) this.lastZone = previousZone;
     if (previousPrice && previousPrice.unit === config.unit && previousPrice.currency === config.currency && previousPrice.precision === config.precision) this.lastPrice = previousPrice;
     const generation = this.generation;
-    const interval = Math.max(1, config.monitorIntervalSeconds) * 1000;
+    const interval = config.monitorIntervalSeconds * 1000;
     const poll = async () => {
       if (generation !== this.generation) return;
       if (this.running) { this.timer = globalThis.setTimeout(poll, interval); return; }
@@ -54,5 +57,5 @@ export class Monitor {
     };
     void poll();
   }
-  stop(): void { this.generation++; if (this.timer) clearTimeout(this.timer); this.timer = undefined; this.lastZone = 'normal'; this.lastPrice = undefined; }
+  stop(): void { this.generation++; if (this.timer !== undefined) clearTimeout(this.timer); this.timer = undefined; this.lastZone = 'normal'; this.lastPrice = undefined; }
 }

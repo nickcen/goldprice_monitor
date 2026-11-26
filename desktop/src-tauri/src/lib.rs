@@ -46,8 +46,11 @@ pub fn run() {
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click { position, .. } = event {
                         if let Some(window) = tray.app_handle().get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) { let _ = window.hide(); }
-                            else { let _ = window.set_position(tauri::PhysicalPosition::new(position.x as i32, position.y as i32)); let _ = window.show(); let _ = window.set_focus(); }
+                            if !window.is_visible().unwrap_or(false) {
+                                let _ = window.set_position(tauri::PhysicalPosition::new(position.x as i32, position.y as i32));
+                                let _ = window.show();
+                            }
+                            let _ = window.set_focus();
                         }
                     }
                 })
@@ -57,7 +60,6 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 WindowEvent::CloseRequested { api, .. } => { api.prevent_close(); let _ = window.hide(); }
-                WindowEvent::Focused(false) => { let _ = window.hide(); }
                 _ => {}
             }
         })

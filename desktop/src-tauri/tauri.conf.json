@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "label": "main", "title": "金价监控", "width": 960, "height": 640, "minWidth": 640, "minHeight": 480 }],
+    "windows": [{ "label": "main", "title": "金价监控", "visible": false, "width": 960, "height": 640, "minWidth": 640, "minHeight": 480 }],
     "security": { "capabilities": ["main"], "csp": "default-src 'self'; connect-src 'self' http: https:; img-src 'self' data:; style-src 'self' 'unsafe-inline'" }
   },
   "bundle": {

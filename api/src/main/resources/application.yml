@@ -22,7 +22,7 @@ app:
   jwt-secret: ${APP_JWT_SECRET:3dhReWTZ8yCJGSOaUlNjSlhBWUdOJ5jI}
   admin-username: ${APP_ADMIN_USERNAME:}
   admin-password: ${APP_ADMIN_PASSWORD:}
-  price-source-url: ${APP_PRICE_SOURCE_URL:}
+  price-source-url: ${APP_PRICE_SOURCE_URL:https://coinapi.gcsgcs.com/api/Accumulate/GetRealTimeGoldPrice}
   currency: ${APP_CURRENCY:CNY}
   unit: ${APP_PRICE_UNIT:gram}
   monitor-interval-seconds: ${APP_MONITOR_INTERVAL_SECONDS:60}

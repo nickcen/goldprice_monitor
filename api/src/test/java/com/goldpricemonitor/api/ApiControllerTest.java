@@ -50,4 +50,12 @@ class ApiControllerTest {
         when(payments.list(eq(7),eq("pay-1"),any(),any(),isNull(),isNull(),eq(0))).thenReturn(List.of());service.list(7,"pay-1",start,end,null,null,1);verify(payments).count(7,"pay-1",LocalDateTime.ofInstant(start,ZoneOffset.UTC),LocalDateTime.ofInstant(end,ZoneOffset.UTC),null,null);
         when(skus.insert(anyMap())).thenAnswer(call->{Map<String,Object> row=call.getArgument(0);row.put("id",9);return 1;});when(skus.byId(9)).thenReturn(Map.of("id",9,"name","gold","price",100,"status",1));assertEquals(9,skuService.create(new SkuService.Input("gold",100,1,0)).get("id"));
     }
+    @Test void coinApiPriceUsesFetchTimeAndRejectsFailedResponse() throws Exception {
+        var controller=new ApiController(mock(JdbcTemplate.class),new ObjectMapper(),"test-only-secret-12345678901234567890","","CNY","gram",60,"http://localhost:8080","","");
+        var mapper=new ObjectMapper();
+        Map<?,?> result=ReflectionTestUtils.invokeMethod(controller,"priceResponse",mapper.readTree("{\"status\":true,\"code\":1,\"data\":772.28}"));
+        assertEquals("772.28",result.get("price"));
+        assertNotNull(java.time.Instant.parse((String)result.get("dataTime")));
+        assertThrows(IllegalArgumentException.class,()->ReflectionTestUtils.invokeMethod(controller,"priceResponse",mapper.readTree("{\"status\":false,\"code\":1,\"data\":772.28}")));
+    }
 }

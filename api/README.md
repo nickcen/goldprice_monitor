@@ -1,6 +1,6 @@
 # API 服务
 
-Java 21、Spring Boot 3.5.6、MyBatis Spring Boot Starter 3.0.5、MySQL Connector/J 9.4.0 的最小工程。当前仅提供 Spring Boot Actuator 健康检查；业务接口和规则待产品需求确定。
+Java 21、Spring Boot 3.5.6、MyBatis Spring Boot Starter 3.0.5、MySQL Connector/J 9.4.0 的最小工程。使用 Spring Boot 管理的 Flyway 版本执行 MySQL 迁移。当前仅提供 Spring Boot Actuator 健康检查；业务接口和规则待产品需求确定。
 
 ## 环境
 
@@ -23,4 +23,10 @@ mvn spring-boot:run
 
 健康检查位于 `GET http://localhost:8080/actuator/health`，返回 Spring Boot 标准 JSON。数据库不可用时健康状态为 `DOWN`，这是预期行为。测试关闭数据库健康探测，以验证 HTTP 端点而无需外部 MySQL。生产环境应通过部署系统注入数据库凭据；不要把密码写入仓库或命令行。
 
-数据库表的初稿见 `../docs/DATABASE_DESIGN.md`。本工程不自动建表或迁移；数据库版本与迁移方案仍待确定。尚未定义业务 API，因此没有添加空的 controller、service 或 mapper。
+## 数据库迁移
+
+应用启动时，Flyway 从 `src/main/resources/db/migration` 执行尚未应用的版本化 SQL，并在数据库中维护 `flyway_schema_history`。`V1__initial_schema.sql` 实现 `../docs/DATABASE_DESIGN.md` 中的初版四张表。后续结构调整请新增 `V2__...sql` 等迁移文件，不修改已经部署过的脚本。Flyway 与应用共用 `DB_URL`、`DB_USER`、`DB_PASSWORD`，数据库用户须有建表和修改表的权限；生产环境可使用独立的迁移账号和部署步骤。
+
+首次运行需要空数据库。如果现有数据库已经手动建了表，请先核对其结构与 V1 一致，并制定基线方案；当前配置关闭自动基线，不会跳过已有表。测试中的 HTTP 健康检查显式关闭 Flyway，以免依赖外部 MySQL。
+
+尚未定义业务 API，因此没有添加空的 controller、service 或 mapper。

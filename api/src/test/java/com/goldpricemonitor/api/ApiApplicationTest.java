@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "management.health.db.enabled=false")
+@TestPropertySource(properties = {"management.health.db.enabled=false", "spring.flyway.enabled=false"})
 class ApiApplicationTest {
     @Autowired MockMvc mvc;
 

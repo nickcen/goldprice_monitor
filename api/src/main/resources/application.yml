@@ -27,3 +27,4 @@ app:
   unit: ${APP_PRICE_UNIT:gram}
   monitor-interval-seconds: ${APP_MONITOR_INTERVAL_SECONDS:60}
   public-base-url: ${APP_PUBLIC_BASE_URL:http://localhost:8080}
+  desktop-origins: ${APP_DESKTOP_ORIGINS:tauri://localhost,http://tauri.localhost,http://127.0.0.1:1420}

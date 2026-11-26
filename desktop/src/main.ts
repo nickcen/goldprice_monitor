@@ -8,14 +8,20 @@ import { notify, trayStatus } from './platform/desktop';
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing app element');
 const root = app;
-const api = configuredApiClient();
+let api: ReturnType<typeof configuredApiClient> | null = null;
+let setupError = '';
+try { api = configuredApiClient(); }
+catch { setupError = '尚未配置 API 地址。请在构建时设置 VITE_API_BASE_URL。'; }
 let config: Config | null = null;
 let price: GoldPrice | undefined;
 let priceError: string | null = null;
 let configError: string | null = null;
 let message = '';
 let page: 'login' | 'register' | 'home' = 'login';
-const request = <T>(path: string, options: { method?: string; body?: unknown; token?: string } = {}) => api.request<T>(path, options);
+const request = <T>(path: string, options: { method?: string; body?: unknown; token?: string } = {}) => {
+  if (!api) throw new Error(setupError);
+  return api.request<T>(path, options);
+};
 const session = new Session(request, () => { monitor.stop(); config = null; price = undefined; page = 'login'; void trayStatus('未登录'); render(); });
 const monitor = new Monitor(
   () => authorized<GoldPrice>('/api/v1/gold-price/latest'),
@@ -29,6 +35,7 @@ async function authorized<T>(path: string, options: { method?: string; body?: un
 function escape(value: unknown): string { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!); }
 function errorText(error: unknown): string { return error instanceof ApiError && error.response && typeof error.response === 'object' && 'message' in error.response ? String(error.response.message) : error instanceof Error ? error.message : '操作失败'; }
 function render(): void {
+  if (setupError) { root.innerHTML = `<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>需要配置 API</h1><p role="alert">${escape(setupError)}</p></main>`; return; }
   if (page !== 'home') {
     root.innerHTML = `<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>${page === 'login' ? '登录' : '注册'}</h1><p>实时关注金价变化</p><form id="auth-form"><label>手机号<input name="phone" type="tel" required autocomplete="tel" placeholder="13800138000"></label><label>密码<input name="password" type="password" required minlength="8" autocomplete="${page === 'login' ? 'current-password' : 'new-password'}"></label>${page === 'register' ? '<label>确认密码<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label>' : ''}<button type="submit">${page === 'login' ? '登录' : '注册'}</button></form><button class="link" id="switch">${page === 'login' ? '没有账号？注册' : '已有账号？登录'}</button><div class="message" role="status">${escape(message)}</div></main>`;
     root.querySelector('#switch')?.addEventListener('click', () => { page = page === 'login' ? 'register' : 'login'; message = ''; render(); });
@@ -74,4 +81,4 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) void
 async function resume(): Promise<void> { await session.check(); if (session.token && page === 'home') await loadConfig(); }
 void trayStatus('未登录');
 render();
-void session.restore().then(ok => { if (ok) { page = 'home'; void loadConfig(); } else render(); }).catch(() => { message = '无法读取系统凭据，请检查钥匙串权限'; render(); });
+if (!setupError) void session.restore().then(ok => { if (ok) { page = 'home'; void loadConfig(); } else render(); }).catch(() => { message = '无法读取系统凭据，请检查钥匙串权限'; render(); });

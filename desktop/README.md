@@ -13,7 +13,7 @@ cp .env.example .env
 npm run tauri dev
 ```
 
-`VITE_API_BASE_URL` 为 API 根地址，不能包含令牌。桌面端仅请求 API 的 `/api/v1/gold-price/latest`，不直接访问外部金价源。API 用 `APP_PRICE_SOURCE_URL` 连接外部数据源，返回统一的单位、币种、精度和十进制字符串价格。API 需允许桌面 WebView 来源的跨域请求。
+`VITE_API_BASE_URL` 为 API 根地址，不能包含令牌。该地址在构建时写入应用；未配置时应用会显示配置提示，无法登录。桌面端仅请求 API 的 `/api/v1/gold-price/latest`，不直接访问外部金价源。API 用 `APP_PRICE_SOURCE_URL` 连接外部数据源，返回统一的单位、币种、精度和十进制字符串价格。API 需允许桌面 WebView 来源的跨域请求。
 
 JWT 存入 macOS 钥匙串或 Windows 凭据库。登出及会话失效时清除。关闭主窗口后应用留在托盘中继续监控；点击托盘图标切换窗口。macOS 菜单栏显示价格文字，Windows 托盘悬停提示显示价格。通知需要系统权限。
 

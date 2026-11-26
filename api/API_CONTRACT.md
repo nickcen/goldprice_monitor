@@ -1,6 +1,6 @@
 # API v1 contract
 
-Base path: `/api/v1`. JSON request and response keys use camelCase. All authenticated requests send `Authorization: Bearer <token>`. Errors use `{ "code": "...", "message": "..." }`; 400 invalid parameters, 401 absent/invalid/expired account or token, 403 wrong role, 404 missing resource, 409 duplicate phone or deletion conflict, 503 price source failure. List responses use `{items,page,pageSize,total,totalPages}` with fixed page size 10 and one-based `page`.
+Base path: `/api/v1`. Desktop CORS origins default to `tauri://localhost`, `http://tauri.localhost`, and the local Vite dev origin; set `APP_DESKTOP_ORIGINS` to a comma-separated list for other desktop origins. JSON request and response keys use camelCase. All authenticated requests send `Authorization: Bearer <token>`. Errors use `{ "code": "...", "message": "..." }`; 400 invalid parameters, 401 absent/invalid/expired account or token, 403 wrong role, 404 missing resource, 409 duplicate phone or deletion conflict, 503 price source failure. List responses use `{items,page,pageSize,total,totalPages}` with fixed page size 10 and one-based `page`.
 
 ## Authentication
 

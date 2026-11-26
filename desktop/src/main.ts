@@ -14,6 +14,7 @@ let setupError = '';
 try { api = configuredApiClient(); }
 catch { setupError = '尚未配置 API 地址。请在构建时设置 VITE_API_BASE_URL。'; }
 let config: Config | null = null;
+let configRequest = 0;
 let price: GoldPrice | undefined;
 let priceError: string | null = null;
 let configError: string | null = null;
@@ -23,7 +24,7 @@ const request = <T>(path: string, options: { method?: string; body?: unknown; to
   if (!api) throw new Error(setupError);
   return api.request<T>(path, options);
 };
-const session = new Session(request, () => { monitor.stop(); config = null; price = undefined; page = 'login'; void trayStatus('未登录'); render(); });
+const session = new Session(request, () => { configRequest++; monitor.stop(); config = null; price = undefined; page = 'login'; void trayStatus('未登录'); render(); });
 const monitor = new Monitor(
   () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config); },
   (nextPrice, error) => { price = nextPrice; priceError = error; void trayStatus(nextPrice ? `${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}${error ? '（非最新）' : ''}` : '获取中'); render(); },
@@ -63,8 +64,17 @@ async function submitAuth(event: Event): Promise<void> {
   render();
 }
 async function loadConfig(): Promise<void> {
-  try { config = await authorized<Config>('/api/v1/me/config'); configError = null; monitor.start(config); }
-  catch (error) { config = null; monitor.stop(); configError = errorText(error); }
+  const requestId = ++configRequest;
+  try {
+    const next = await authorized<Config>('/api/v1/me/config');
+    if (requestId !== configRequest || !session.token) return;
+    if (!Number.isSafeInteger(next.monitorIntervalSeconds) || next.monitorIntervalSeconds <= 0) throw new Error('监控频次必须为正整数秒');
+    const changed = !config || next.monitorIntervalSeconds !== config.monitorIntervalSeconds || next.goldPriceUrl !== config.goldPriceUrl || next.unit !== config.unit || next.currency !== config.currency || next.precision !== config.precision || next.minPrice !== config.minPrice || next.maxPrice !== config.maxPrice;
+    config = next;
+    configError = null;
+    if (changed) monitor.start(next);
+  }
+  catch (error) { if (requestId !== configRequest) return; configError = errorText(error); }
   render();
 }
 async function saveConfig(event: Event): Promise<void> {

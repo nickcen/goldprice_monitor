@@ -1,24 +1,17 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { fetchGoldPrice } from './goldPrice';
 import type { Config } from './contracts';
 
 const config: Config = { level: 0, monitorIntervalSeconds: 60, minPrice: null, maxPrice: null,
-  goldPriceUrl: 'https://coinapi.gcsgcs.com/api/Accumulate/GetRealTimeGoldPrice',
-  currency: 'CNY', unit: 'gram', precision: 4 };
+  goldPriceUrl: 'https://example.com/external-price', currency: 'CNY', unit: 'gram', precision: 2 };
 
-afterEach(() => vi.unstubAllGlobals());
-
-it('requests the configured source and parses its price', async () => {
-  const fetch = vi.fn().mockResolvedValue({ ok: true, text: async () => '{"status":true,"code":1,"data":768.48}' });
-  vi.stubGlobal('fetch', fetch);
-  const result = await fetchGoldPrice(config);
-  expect(fetch).toHaveBeenCalledWith(new URL(config.goldPriceUrl));
+it('requests the server for the current instant without using goldPriceUrl', async () => {
+  const request = vi.fn().mockResolvedValue({ price: '768.48', unit: 'gram', currency: 'CNY', precision: 2, dataTime: '2026-11-26T14:23:00Z' });
+  const result = await fetchGoldPrice(config, request, new Date('2026-11-26T14:23:42Z'));
+  expect(request).toHaveBeenCalledWith('/api/v1/gold-price/at?time=2026-11-26T14%3A23%3A42.000Z');
   expect(result.price).toBe('768.48');
-  expect(result.currency).toBe('CNY');
-  expect(Date.parse(result.dataTime)).not.toBeNaN();
 });
 
-it('rejects a failed source response', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => '{"status":false,"code":0,"data":0}' }));
-  await expect(fetchGoldPrice(config)).rejects.toThrow('金价数据源返回失败');
+it('rejects malformed server prices', async () => {
+  await expect(fetchGoldPrice(config, async () => ({ price: '-1', unit: 'gram', currency: 'CNY', precision: 2, dataTime: '2026-11-26T14:23:00Z' }))).rejects.toThrow('金价数据格式无效');
 });

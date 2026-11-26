@@ -105,10 +105,10 @@ components:
         level: *1
         monitorIntervalSeconds: *1
         minPrice:
-          type: number
+          type: string
           nullable: true
         maxPrice:
-          type: number
+          type: string
           nullable: true
         goldPriceUrl: *2
         unit: *2
@@ -127,7 +127,7 @@ components:
       type: object
       properties:
         price:
-          type: number
+          type: string
         dataTime: *3
         unit: *2
         currency: *2

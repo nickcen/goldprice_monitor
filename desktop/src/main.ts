@@ -5,7 +5,7 @@ import { fetchGoldPrice } from './api/goldPrice';
 import { Session } from './state/session';
 import { Monitor, compareDecimal } from './state/monitor';
 import { notify, trayStatus } from './platform/desktop';
-import { chartSvg, loadPoints, localDay, localMinute, prunePoints, savePoint, type PricePoint } from './history';
+import { chartSvg, loadPoints, localDay, localMinute, prunePoints, saveServerPoints, type PricePoint, type ServerPoint } from './history';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing app element');
@@ -34,7 +34,6 @@ const monitor = new Monitor(
   () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config, path => authorized<GoldPrice>(path)); },
   (nextPrice, error) => { price = nextPrice; priceError = error; void updateTray(nextPrice, error); if (page === 'home') render(); },
   (nextPrice, threshold, direction) => { void notify('金价监控提醒', `当前金价 ${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}，${direction === 'low' ? '低于' : '高于'}阈值 ${formatPrice(threshold)}`).catch(() => { message = '系统通知不可用，请检查通知权限'; render(); }); },
-  nextPrice => { void savePoint(nextPrice).then(() => refreshHistory()).catch(error => { historyError = errorText(error); if (page === 'home') render(); }); },
 );
 async function updateTray(nextPrice: GoldPrice | undefined, error: string | null): Promise<void> {
   const update = ++trayUpdate;
@@ -62,8 +61,19 @@ async function refreshHistory(): Promise<void> {
   if (page === 'home') render();
 }
 async function maintainHistory(): Promise<void> {
-  try { await prunePoints(); if (historyDay !== localDay()) points = []; await refreshHistory(); }
+  try { await prunePoints(); if (historyDay !== localDay()) points = []; await syncToday(); }
   catch (error) { historyError = errorText(error); if (page === 'home') render(); }
+  await refreshHistory();
+}
+async function syncToday(): Promise<void> {
+  if (!config) return;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+  const beijingDay = (value: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(value);
+  const days = [...new Set([beijingDay(start), beijingDay(end)])];
+  const rows = await Promise.all(days.map(async date => ({ date, points: await authorized<ServerPoint[]>(`/api/v1/gold-price/day?date=${date}`) })));
+  await saveServerPoints(rows, config, now);
 }
 globalThis.setInterval(() => void maintainHistory(), 60 * 60 * 1000);
 void prunePoints().catch(error => { historyError = errorText(error); });
@@ -89,7 +99,7 @@ function render(): void {
     return;
   }
   const home = page === 'home';
-  root.innerHTML = `<main class="app-shell"><nav class="sidebar" aria-label="主导航"><div class="brand-mark" aria-hidden="true">◆</div><button class="nav-item ${home ? 'active' : ''}" id="nav-home" aria-current="${home ? 'page' : 'false'}"><span aria-hidden="true">⌂</span>首页</button><button class="nav-item ${!home ? 'active' : ''}" id="nav-account" aria-current="${!home ? 'page' : 'false'}"><span aria-hidden="true">◉</span>账户</button></nav><div class="content"><header class="page-header"><div><span class="eyebrow">GOLDPRICE MONITOR</span><h1>${home ? '首页' : '账户'}</h1></div><button class="secondary" id="logout">登出</button></header>${home ? `<section class="price-card"><span>当前金价</span><strong>${price ? escape(formatPrice(price.price)) : '—'}</strong><small>${config ? `${escape(config.currency)} / ${escape(config.unit)}` : '获取中'}</small><p>${price ? `数据时间 ${escape(formatDataTime(price.dataTime))}` : '等待首个价格'}</p><p class="${priceError ? 'error' : ''}">${escape(priceError ? (price ? `${priceError}（显示上次成功价格，非最新）` : priceError) : (price ? '监控中' : '获取中'))}</p>${message ? `<p class="error" role="alert">${escape(message)}</p>` : ''}</section><section class="chart-card"><h2>今日金价走势</h2><p>${escape(config ? `${config.currency} / ${config.unit}` : '获取中')} · ${escape(localDay())}</p>${historyError ? `<p class="error" role="alert">历史记录：${escape(historyError)}</p>` : chartSvg(historyDay === localDay() ? points : [])}</section>` : `<section class="settings"><div class="section-heading"><div><span class="eyebrow">ACCOUNT SETTINGS</span><h2>监控配置</h2></div><button class="secondary" id="refresh-config" type="button">重新获取用户配置</button></div>${config ? `<div class="config-grid"><div><span>用户等级</span><strong>${escape(config.level)}</strong></div><div><span>监控频率</span><strong>每 ${escape(config.monitorIntervalSeconds)} 秒</strong></div><div><span>币种</span><strong>${escape(config.currency)}</strong></div><div><span>单位</span><strong>${escape(config.unit)}</strong></div><div><span>价格精度</span><strong>${escape(config.precision)} 位小数</strong></div><div class="config-url"><span>金价数据地址</span><strong class="url">${escape(config.goldPriceUrl)}</strong></div></div><form id="config-form"><label>低价提醒<input name="min" inputmode="decimal" placeholder="不设置" value="${escape(config.minPrice == null ? '' : formatPrice(config.minPrice))}"></label><label>高价提醒<input name="max" inputmode="decimal" placeholder="不设置" value="${escape(config.maxPrice == null ? '' : formatPrice(config.maxPrice))}"></label><button type="submit">保存阈值</button></form>${configError ? `<p class="error" role="alert">配置刷新失败：${escape(configError)}</p><button id="retry">重试</button>` : ''}` : `<p class="error">${escape(configError ?? '正在获取配置')}</p><button id="retry">重试</button>`}<div class="message" role="status">${escape(message)}</div></section>`}</div></main>`;
+  root.innerHTML = `<main class="app-shell"><nav class="sidebar" aria-label="主导航"><div class="brand-mark" aria-hidden="true">◆</div><button class="nav-item ${home ? 'active' : ''}" id="nav-home" aria-current="${home ? 'page' : 'false'}"><span aria-hidden="true">⌂</span>首页</button><button class="nav-item ${!home ? 'active' : ''}" id="nav-account" aria-current="${!home ? 'page' : 'false'}"><span aria-hidden="true">◉</span>账户</button></nav><div class="content"><header class="page-header"><div><span class="eyebrow">GOLDPRICE MONITOR</span><h1>${home ? '首页' : '账户'}</h1></div><button class="secondary" id="logout">登出</button></header>${home ? `<section class="price-card"><span>当前金价</span><strong>${price ? escape(formatPrice(price.price)) : '—'}</strong><small>${config ? `${escape(config.currency)} / ${escape(config.unit)}` : '获取中'}</small><p>${price ? `数据时间 ${escape(formatDataTime(price.dataTime))}` : '等待首个价格'}</p><p class="${priceError ? 'error' : ''}">${escape(priceError ? (price ? `${priceError}（显示上次成功价格，非最新）` : priceError) : (price ? '监控中' : '获取中'))}</p>${message ? `<p class="error" role="alert">${escape(message)}</p>` : ''}</section><section class="chart-card"><h2>今日金价走势</h2><p>${escape(config ? `${config.currency} / ${config.unit}` : '获取中')} · ${escape(localDay())}</p>${historyError ? `<p class="error" role="alert">历史记录：${escape(historyError)}</p>` : chartSvg(historyDay === localDay() ? points : [])}</section>` : `<section class="settings"><div class="section-heading"><div><span class="eyebrow">ACCOUNT SETTINGS</span><h2>监控配置</h2></div><button class="secondary" id="refresh-config" type="button">重新获取用户配置</button></div>${config ? `<div class="config-grid"><div><span>用户等级</span><strong>${escape(config.level)}</strong></div><div><span>监控频率</span><strong>每 ${escape(config.monitorIntervalSeconds)} 秒</strong></div></div><form id="config-form"><label>低价提醒<input name="min" inputmode="decimal" placeholder="不设置" value="${escape(config.minPrice == null ? '' : formatPrice(config.minPrice))}"></label><label>高价提醒<input name="max" inputmode="decimal" placeholder="不设置" value="${escape(config.maxPrice == null ? '' : formatPrice(config.maxPrice))}"></label><button type="submit">保存阈值</button></form>${configError ? `<p class="error" role="alert">配置刷新失败：${escape(configError)}</p><button id="retry">重试</button>` : ''}` : `<p class="error">${escape(configError ?? '正在获取配置')}</p><button id="retry">重试</button>`}<div class="message" role="status">${escape(message)}</div></section>`}</div></main>`;
   root.querySelector('#nav-home')?.addEventListener('click', () => { if (page !== 'home') { page = 'home'; render(); } });
   root.querySelector('#nav-account')?.addEventListener('click', () => { if (page !== 'account') { page = 'account'; render(); } });
   root.querySelector('#logout')?.addEventListener('click', () => void session.logout());
@@ -122,7 +132,7 @@ async function loadConfig(): Promise<void> {
     const next = await authorized<Config>('/api/v1/me/config');
     if (requestId !== configRequest || !session.token) return;
     if (!Number.isSafeInteger(next.monitorIntervalSeconds) || next.monitorIntervalSeconds <= 0) throw new Error('监控频次必须为正整数秒');
-    const changed = !config || next.monitorIntervalSeconds !== config.monitorIntervalSeconds || next.goldPriceUrl !== config.goldPriceUrl || next.unit !== config.unit || next.currency !== config.currency || next.precision !== config.precision || next.minPrice !== config.minPrice || next.maxPrice !== config.maxPrice;
+    const changed = !config || next.monitorIntervalSeconds !== config.monitorIntervalSeconds || next.unit !== config.unit || next.currency !== config.currency || next.precision !== config.precision || next.minPrice !== config.minPrice || next.maxPrice !== config.maxPrice;
     config = next;
     configError = null;
     void maintainHistory();

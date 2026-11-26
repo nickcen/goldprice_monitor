@@ -13,6 +13,20 @@ export async function savePoint(price: GoldPrice, date = new Date()): Promise<vo
   const rows = read().filter(row => !(row.day === point.day && row.minute === point.minute && row.currency === point.currency && row.unit === point.unit && row.precision === point.precision));
   rows.push(point); localStorage.setItem(key, JSON.stringify(rows));
 }
+export interface ServerPoint { minute: number; price: number }
+export async function saveServerPoints(rows: { date: string; points: ServerPoint[] }[], config: Config, date = new Date()): Promise<void> {
+  const day = localDay(date);
+  const points: Stored[] = rows.flatMap(({ date: beijingDay, points }) => points.map(point => {
+    if (!Number.isInteger(point.minute) || point.minute < 0 || point.minute > 1439 || !Number.isFinite(point.price) || point.price < 0) throw new Error('服务器金价记录无效');
+    const instant = new Date(`${beijingDay}T00:00:00+08:00`);
+    if (Number.isNaN(instant.getTime())) throw new Error('服务器金价日期无效');
+    instant.setTime(instant.getTime() + point.minute * 60_000);
+    return { day: localDay(instant), minute: localMinute(instant), price: String(point.price), currency: config.currency, unit: config.unit, precision: config.precision };
+  })).filter(point => point.day === day);
+  if (isTauri()) { await invoke('save_price_points', { day, currency: config.currency, unit: config.unit, precision: config.precision, points }); return; }
+  const merged = read().filter(row => !(row.day === day && row.currency === config.currency && row.unit === config.unit && row.precision === config.precision));
+  localStorage.setItem(key, JSON.stringify([...merged, ...points]));
+}
 export async function loadPoints(config: Config, date = new Date()): Promise<PricePoint[]> {
   const query = { day: localDay(date), currency: config.currency, unit: config.unit, precision: config.precision };
   if (isTauri()) return invoke<PricePoint[]>('load_price_points', query);
@@ -36,12 +50,11 @@ export function chartSvg(points: PricePoint[]): string {
   const coordinates = points.map((point, i) => ({ x: timeSpan ? 76 + (minutes[i] - firstMinute) / timeSpan * 584 : 368, y: 152 - (values[i] - min) / spread * 116 }));
   const polyline = coordinates.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   const escape = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
-  const dots = coordinates.map(({ x, y }, i) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${points.length === 1 ? 5 : 3}"><title>${escape(points[i].minute)} · ${escape(points[i].price)}</title></circle>`).join('');
   const firstTime = points[minutes.indexOf(firstMinute)].minute;
   const lastTime = points[minutes.indexOf(lastMinute)].minute;
   const ticks = max === min ? [{ value: min, y: 152 }] : [
     { value: max, y: 36 }, { value: (min + max) / 2, y: 94 }, { value: min, y: 152 },
   ];
   const priceAxis = ticks.map(({ value, y }) => `<line class="price-grid" x1="76" y1="${y}" x2="660" y2="${y}"/><text class="price-tick" x="68" y="${y + 4}" text-anchor="end">${value.toFixed(2)}</text>`).join('');
-  return `<svg class="price-chart" viewBox="0 0 700 190" role="img" aria-label="当天价格折线图，从 ${escape(firstTime)} 到 ${escape(lastTime)}">${priceAxis}<polyline points="${polyline}"/>${dots}<text x="76" y="182">${escape(firstTime)}</text><text x="660" y="182" text-anchor="end">${escape(lastTime)}</text></svg>`;
+  return `<svg class="price-chart" viewBox="0 0 700 190" role="img" aria-label="当天价格折线图，从 ${escape(firstTime)} 到 ${escape(lastTime)}">${priceAxis}<polyline points="${polyline}"/><text x="76" y="182">${escape(firstTime)}</text><text x="660" y="182" text-anchor="end">${escape(lastTime)}</text></svg>`;
 }

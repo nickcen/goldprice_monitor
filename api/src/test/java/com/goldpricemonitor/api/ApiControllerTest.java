@@ -27,7 +27,7 @@ class ApiControllerTest {
     private static User user(int id,String phone,String hash){User u=new User();u.setId(id);u.setPhone(phone);u.setPasswordHash(hash);u.setStatus(1);return u;}
     private static AdminAccount admin(int id,String hash){AdminAccount a=new AdminAccount();a.setId(id);a.setPasswordHash(hash);a.setStatus(1);return a;}
     private static AuthSession session(){AuthSession a=new AuthSession();a.setRevoked(false);a.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusHours(1));return a;}
-    private static UserConfig config(){UserConfig c=new UserConfig();c.setLevel(0);c.setMonitorIntervalSeconds(60);c.setMinPrice(new BigDecimal("900719925474.0993"));c.setMaxPrice(new BigDecimal("900719925475.0000"));c.setGoldPriceUrl("http://localhost");return c;}
+    private static UserConfig config(){UserConfig c=new UserConfig();c.setLevel(0);c.setMonitorIntervalSeconds(60);c.setMinPrice(new BigDecimal("900719925474.0993"));c.setMaxPrice(new BigDecimal("900719925475.0000"));return c;}
     private static Sku sku(int id){Sku s=new Sku();s.setId(id);s.setName("gold");s.setPrice(100);s.setStatus(1);s.setSortOrder(0);s.setCreateTime(LocalDateTime.now(ZoneOffset.UTC));return s;}
     @Test void routesRequireAuthorizationAndValidateRegistration() throws Exception {
         var mvc=MockMvcBuilders.standaloneSetup(new AuthController(auth),new AdminAuthController(auth),new UserConfigController(auth,configService),new GoldPriceController(auth,new GoldPriceService(configService,mock(GoldPriceMapper.class),mock(org.springframework.data.redis.core.StringRedisTemplate.class),"","gram","CNY")),new AdminUserController(auth,userService),new PaymentController(auth,new PaymentService(payments)),new SkuController(auth,skuService)).setControllerAdvice(new ApiErrors()).build();
@@ -48,7 +48,7 @@ class ApiControllerTest {
     }
     @Test void registrationCreatesConfigAndRefreshRevokesOldSession() {
         when(users.insert(any(User.class))).thenAnswer(call->{User row=call.getArgument(0);row.setId(42);return 1;});
-        assertEquals(42,auth.register("13800000000","password123").get("id"));verify(configs).insert(argThat((UserConfig c) -> c.getUserId()==42 && c.getMonitorIntervalSeconds()==60 && c.getGoldPriceUrl().equals("http://localhost:8080/api/v1/gold-price/latest")));
+        assertEquals(42,auth.register("13800000000","password123").get("id"));verify(configs).insert(argThat((UserConfig c) -> c.getUserId()==42 && c.getMonitorIntervalSeconds()==60));
         String hash=new BCryptPasswordEncoder().encode("password123");when(users.byPhone("+8613800000000")).thenReturn(user(42,"+8613800000000",hash));when(users.byId(42)).thenReturn(user(42,"+8613800000000",hash));when(sessions.find(anyString(),eq(42),eq("USER"))).thenReturn(session());when(sessions.revokeActive(anyString())).thenReturn(1);
         String token=(String)auth.login("13800000000","password123").get("token");MockHttpServletRequest request=new MockHttpServletRequest();request.addHeader("Authorization","Bearer "+token);assertEquals("USER",auth.refresh(request).get("role"));verify(sessions).revokeActive(anyString());
     }

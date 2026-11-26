@@ -110,7 +110,6 @@ components:
         maxPrice:
           type: string
           nullable: true
-        goldPriceUrl: *2
         unit: *2
         currency: *2
         precision: *1
@@ -119,7 +118,6 @@ components:
       - monitorIntervalSeconds
       - minPrice
       - maxPrice
-      - goldPriceUrl
       - unit
       - currency
       - precision

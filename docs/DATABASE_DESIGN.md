@@ -29,7 +29,6 @@ CREATE TABLE user_config (
     max_price DECIMAL(18, 4) NULL COMMENT '金价高价阈值',
     monitor_interval_seconds INT NOT NULL COMMENT '监控频率，单位：秒',
     level INT NOT NULL DEFAULT 0 COMMENT '用户等级，具体取值由业务定义',
-    gold_price_url VARCHAR(2048) NOT NULL COMMENT '金价监控地址',
     create_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     update_time DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (id),

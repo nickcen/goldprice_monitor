@@ -19,7 +19,7 @@ Phone input accepts E.164 or a mainland China 11-digit mobile number, stored as 
 
 | Method | Path | Body / filter | Response |
 | --- | --- | --- | --- |
-| GET | `/me/config` | none | `{level,monitorIntervalSeconds,minPrice,maxPrice,goldPriceUrl,unit,currency,precision}` |
+| GET | `/me/config` | none | `{level,monitorIntervalSeconds,minPrice,maxPrice,unit,currency,precision}` |
 | PATCH | `/me/config` | any of `minPrice`, `maxPrice`; JSON null clears a side | saved configuration |
 | GET | `/gold-price/latest` | none | `{price,unit,currency,precision,dataTime}` |
 
@@ -45,4 +45,4 @@ Time range filters are half-open `[from,to)` and may be combined. Timestamp inpu
 
 ### 按时点查询金价
 
-`GET /api/v1/gold-price/at?time=<ISO8601>` 需要用户 Bearer token。时间必须包含 UTC 偏移量，服务器按 UTC 分钟查询 `gold_price`，返回 `{price,unit,currency,precision,dataTime}`，其中 `dataTime` 是分钟起点。不存在的分钟返回 `404 PRICE_NOT_FOUND`，无效时间返回 `400 INVALID_PARAMETER`。服务器每分钟从默认数据源采集，查询结果在 Redis 按分钟缓存 5 分钟；Redis 不可用时从数据库读取。
+`GET /api/v1/gold-price/at?time=<ISO8601>` 需要用户 Bearer token。时间必须包含 UTC 偏移量，服务器将时间转换为北京时间，按北京时间的 `date` 和当天从零点起算的 `minute` 查询 `gold_price`，返回 `{price,unit,currency,precision,dataTime}`，其中 `dataTime` 是分钟起点的 UTC 时间戳。`GET /api/v1/gold-price/day?date=YYYY-MM-DD` 的日期及返回的 `minute` 同样采用北京时间。不存在的分钟返回 `404 PRICE_NOT_FOUND`，无效时间返回 `400 INVALID_PARAMETER`。服务器每分钟从默认数据源采集，查询结果在 Redis 按分钟缓存 5 分钟；Redis 不可用时从数据库读取。

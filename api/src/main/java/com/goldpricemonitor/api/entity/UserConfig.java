@@ -16,7 +16,6 @@ public class UserConfig {
     private BigDecimal maxPrice;
     private Integer monitorIntervalSeconds;
     private Integer level;
-    private String goldPriceUrl;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
@@ -32,8 +31,6 @@ public class UserConfig {
     public void setMonitorIntervalSeconds(Integer monitorIntervalSeconds) { this.monitorIntervalSeconds = monitorIntervalSeconds; }
     public Integer getLevel() { return level; }
     public void setLevel(Integer level) { this.level = level; }
-    public String getGoldPriceUrl() { return goldPriceUrl; }
-    public void setGoldPriceUrl(String goldPriceUrl) { this.goldPriceUrl = goldPriceUrl; }
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
     public LocalDateTime getUpdateTime() { return updateTime; }

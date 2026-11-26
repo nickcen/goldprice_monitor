@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { compareDecimal, Monitor } from './monitor';
 import type { Config, GoldPrice } from '../api/contracts';
 
-const config: Config = { level: 0, monitorIntervalSeconds: 1, minPrice: '100.0000', maxPrice: '200.0000', goldPriceUrl: '/api/v1/gold-price/latest', currency: 'CNY', unit: 'gram', precision: 4 };
+const config: Config = { level: 0, monitorIntervalSeconds: 1, minPrice: '100.0000', maxPrice: '200.0000', currency: 'CNY', unit: 'gram', precision: 4 };
 const quote = (price: string): GoldPrice => ({ price, currency: 'CNY', unit: 'gram', precision: 4, dataTime: '2026-11-26T00:00:00Z' });
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
 

@@ -1,13 +1,15 @@
 use tauri::{Manager, WindowEvent};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use rusqlite::{params, Connection};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 const SERVICE: &str = "com.goldpricemonitor.desktop";
 const ACCOUNT: &str = "access-token";
 
 #[derive(Serialize)]
 struct PricePoint { minute: String, price: String }
+#[derive(Deserialize)]
+struct StoredPricePoint { day: String, minute: String, price: String, currency: String, unit: String, precision: i64 }
 
 fn history_db(app: &tauri::AppHandle) -> Result<Connection, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -22,6 +24,21 @@ fn save_price_point(app: tauri::AppHandle, day: String, minute: String, price: S
     if day.len() != 10 || minute.len() != 5 || price.parse::<f64>().map_or(true, |v| !v.is_finite() || v < 0.0) || currency.is_empty() || unit.is_empty() || precision < 0 { return Err("无效金价记录".into()); }
     history_db(&app)?.execute("INSERT INTO price_history(day, minute, price, currency, unit, precision) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(day, minute, currency, unit, precision) DO UPDATE SET price=excluded.price", params![day, minute, price, currency, unit, precision]).map_err(|e| e.to_string())?;
     Ok(())
+}
+#[tauri::command]
+fn save_price_points(app: tauri::AppHandle, day: String, currency: String, unit: String, precision: i64, points: Vec<StoredPricePoint>) -> Result<(), String> {
+    if day.len() != 10 || currency.is_empty() || unit.is_empty() || precision < 0 { return Err("无效金价记录".into()); }
+    let mut db = history_db(&app)?;
+    let tx = db.transaction().map_err(|e| e.to_string())?;
+    for point in &points {
+        if point.day.len() != 10 || point.minute.len() != 5 || point.price.parse::<f64>().map_or(true, |v| !v.is_finite() || v < 0.0) || point.currency.is_empty() || point.unit.is_empty() || point.precision < 0 { return Err("无效金价记录".into()); }
+        if point.day != day || point.currency != currency || point.unit != unit || point.precision != precision { return Err("金价记录配置不一致".into()); }
+    }
+    tx.execute("DELETE FROM price_history WHERE day=?1 AND currency=?2 AND unit=?3 AND precision=?4", params![day, currency, unit, precision]).map_err(|e| e.to_string())?;
+    for point in points {
+        tx.execute("INSERT INTO price_history(day, minute, price, currency, unit, precision) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(day, minute, currency, unit, precision) DO UPDATE SET price=excluded.price", params![point.day, point.minute, point.price, point.currency, point.unit, point.precision]).map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -106,7 +123,7 @@ async fn fetch_gold_price(url: String) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![read_token, save_token, clear_token, tray_status, fetch_gold_price, save_price_point, load_price_points, prune_price_points])
+        .invoke_handler(tauri::generate_handler![read_token, save_token, clear_token, tray_status, fetch_gold_price, save_price_point, save_price_points, load_price_points, prune_price_points])
         .setup(|app| {
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().expect("icon").clone())

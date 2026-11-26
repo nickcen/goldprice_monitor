@@ -127,7 +127,7 @@ public class ApiController {
         try {
             db.update("INSERT INTO `user`(phone,password_hash) VALUES (?,?)",ph,hash);
             int id=db.queryForObject("SELECT id FROM `user` WHERE phone=?",Integer.class,ph);
-            db.update("INSERT INTO user_config(user_id,monitor_interval_seconds,level,gold_price_url) VALUES (?,?,0,?)",id,interval,publicBaseUrl+"/api/v1/gold-price/latest");
+            db.update("INSERT INTO user_config(user_id,monitor_interval_seconds,level) VALUES (?,?,0)",id,interval);
             return Map.of("id",id,"phone",ph);
         } catch(DataIntegrityViolationException e){ throw error(HttpStatus.CONFLICT,"PHONE_EXISTS","手机号已注册"); }
     }
@@ -152,7 +152,7 @@ public class ApiController {
         Map<String,Object> out=new LinkedHashMap<>();
         out.put("level",c.get("level")); out.put("monitorIntervalSeconds",c.get("monitor_interval_seconds"));
         out.put("minPrice",c.get("min_price")==null?null:((BigDecimal)c.get("min_price")).toPlainString()); out.put("maxPrice",c.get("max_price")==null?null:((BigDecimal)c.get("max_price")).toPlainString());
-        out.put("goldPriceUrl",c.get("gold_price_url")); out.put("unit",unit); out.put("currency",currency); out.put("precision",2);
+        out.put("unit",unit); out.put("currency",currency); out.put("precision",2);
         return out;
     }
     @GetMapping("/me/config") public Map<String,Object> getConfig(HttpServletRequest r) { return config(user(r).id); }

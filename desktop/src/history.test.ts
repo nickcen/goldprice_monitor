@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { chartSvg, loadPoints, prunePoints, savePoint } from './history';
+import { chartSvg, loadPoints, prunePoints, savePoint, saveServerPoints } from './history';
 import type { Config, GoldPrice } from './api/contracts';
 
 const data = new Map<string, string>();
@@ -25,10 +25,21 @@ it('filters configuration and removes other days', async () => {
   expect(JSON.parse(data.get('gold-price-history-v1') ?? '[]')).toHaveLength(1);
 });
 
+it('replaces local day with server Beijing minutes and removes stale points', async () => {
+  const instant = new Date(2026, 10, 26, 10, 0);
+  const beijing = new Date(instant.getTime() + 8 * 60 * 60 * 1000);
+  const beijingDay = beijing.toISOString().slice(0, 10);
+  const minute = beijing.getUTCHours() * 60 + beijing.getUTCMinutes();
+  await saveServerPoints([{ date: beijingDay, points: [{ minute, price: 500 }, { minute: 0, price: 400 }] }], config, instant);
+  await saveServerPoints([{ date: beijingDay, points: [{ minute, price: 501 }] }], config, instant);
+  expect(await loadPoints(config, instant)).toEqual([{ minute: '10:00', price: '501' }]);
+});
+
 it('renders empty, single point and multi point chart states', () => {
   expect(chartSvg([])).toContain('暂无价格记录');
-  expect(chartSvg([{ minute: '10:00', price: '500' }])).toContain('<circle');
+  expect(chartSvg([{ minute: '10:00', price: '500' }])).not.toContain('<circle');
   expect(chartSvg([{ minute: '10:00', price: '500' }, { minute: '11:00', price: '510' }])).toContain('<polyline');
+  expect(chartSvg([{ minute: '10:00', price: '500' }, { minute: '11:00', price: '510' }])).not.toContain('<circle');
 });
 
 it('spreads recorded times across the chart and labels the actual range', () => {

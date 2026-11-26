@@ -151,7 +151,7 @@ public class ApiController {
         if(c==null) throw error(HttpStatus.NOT_FOUND,"NOT_FOUND","配置不存在");
         Map<String,Object> out=new LinkedHashMap<>();
         out.put("level",c.get("level")); out.put("monitorIntervalSeconds",c.get("monitor_interval_seconds"));
-        out.put("minPrice",c.get("min_price")); out.put("maxPrice",c.get("max_price"));
+        out.put("minPrice",c.get("min_price")==null?null:((BigDecimal)c.get("min_price")).toPlainString()); out.put("maxPrice",c.get("max_price")==null?null:((BigDecimal)c.get("max_price")).toPlainString());
         out.put("goldPriceUrl",c.get("gold_price_url")); out.put("unit",unit); out.put("currency",currency); out.put("precision",4);
         return out;
     }
@@ -177,7 +177,7 @@ public class ApiController {
             JsonNode node=http.get().uri(priceSource).retrieve().body(JsonNode.class);
             if(node==null || !node.has("price") || !node.has("dataTime")) throw new IllegalArgumentException();
             BigDecimal price=decimal(node.get("price")); Instant time=Instant.parse(node.get("dataTime").asText());
-            return Map.of("price",price,"unit",unit,"currency",currency,"precision",4,"dataTime",time.toString());
+            return Map.of("price",price.toPlainString(),"unit",unit,"currency",currency,"precision",4,"dataTime",time.toString());
         } catch(Exception e){ throw error(HttpStatus.SERVICE_UNAVAILABLE,"PRICE_SOURCE_UNAVAILABLE","金价数据源不可用"); }
     }
 

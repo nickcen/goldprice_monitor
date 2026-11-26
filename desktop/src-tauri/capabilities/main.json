@@ -3,5 +3,5 @@
   "identifier": "main",
   "description": "Minimum window permissions for the initial desktop shell",
   "windows": ["main"],
-  "permissions": []
+  "permissions": ["notification:default"]
 }

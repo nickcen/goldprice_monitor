@@ -1,19 +1,21 @@
 # 桌面应用
 
-Tauri 2 + Vite + TypeScript 基础工程，目标平台为 macOS 和 Windows。当前仅提供启动界面与通用 JSON API 客户端；业务页面待 API 契约确定后实现。
+Tauri 2 + Vite + TypeScript，目标平台 macOS 与 Windows。实现注册、登录、配置、金价轮询、越界通知与系统托盘。自动更新暂不实现。
 
 ## 本地开发
 
-需要 Node.js 20.19+ 或 22.12+、npm、Rust stable、Tauri 2 对应的系统依赖。macOS 需要 Xcode Command Line Tools；Windows 需要 Microsoft C++ Build Tools 和 WebView2。
+需要 Node.js 20.19+ 或 22.12+、npm、Rust stable 及 Tauri 2 系统依赖。macOS 需要 Xcode Command Line Tools；Windows 需要 Microsoft C++ Build Tools 和 WebView2。API 需按 `api/README.md` 配置并启动。
 
 ```sh
 cd desktop
-npm install
+npm ci
 cp .env.example .env
 npm run tauri dev
 ```
 
-`VITE_API_BASE_URL` 是 API 服务根地址，可在 `.env` 中按环境设置。`VITE_` 变量会被编入前端资源，不能放令牌或服务端密钥。API 客户端在 `src/api/client.ts`，只接受相对路径，并可逐次传入内存中的访问令牌；应用尚不持久化令牌。API 服务需要允许桌面 WebView 的请求来源及跨域预检。
+`VITE_API_BASE_URL` 为 API 根地址，不能包含令牌。该地址在构建时写入应用；未配置时应用会显示配置提示，无法登录。桌面端仅请求 API 的 `/api/v1/gold-price/latest`，不直接访问外部金价源。API 用 `APP_PRICE_SOURCE_URL` 连接外部数据源，返回统一的单位、币种、精度和十进制字符串价格。API 需允许桌面 WebView 来源的跨域请求。
+
+JWT 存入 macOS 钥匙串或 Windows 凭据库。登出及会话失效时清除。关闭主窗口后应用留在托盘中继续监控；点击托盘图标切换窗口。macOS 菜单栏显示价格文字，Windows 托盘悬停提示显示价格。通知需要系统权限。
 
 ## 检查与构建
 
@@ -23,6 +25,4 @@ npm run tauri info
 npm run tauri build
 ```
 
-构建产物在 `src-tauri/target/release/bundle/`。当前未配置自动更新。发布 macOS/Windows 安装包前，需分别配置平台签名、证书和发布流程；签名密钥只放 CI 密钥库或本机安全存储，绝不提交。`desktop/.env`、`target/`、`dist/` 均被忽略。
-
-注册、登录、价格监控、通知、托盘和更新等业务功能见 [桌面端前端功能说明](../docs/DESKTOP_FUNCTIONS.md)。本提交仅初始化可启动工程；后续实现以该文档和 API 契约为准。
+构建产物在 `src-tauri/target/release/bundle/`。Windows 与 macOS 均需实机验证托盘、通知和凭据库。自动更新的签名及发布配置留待后续任务。

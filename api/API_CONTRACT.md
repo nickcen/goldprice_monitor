@@ -1,6 +1,6 @@
 # API v1 contract
 
-Base path: `/api/v1`. JSON request and response keys use camelCase. All authenticated requests send `Authorization: Bearer <token>`. Errors use `{ "code": "...", "message": "..." }`; 400 invalid parameters, 401 absent/invalid/expired account or token, 403 wrong role, 404 missing resource, 409 duplicate phone or deletion conflict, 503 price source failure. List responses use `{items,page,pageSize,total,totalPages}` with fixed page size 10 and one-based `page`.
+Base path: `/api/v1`. Desktop CORS origins default to `tauri://localhost`, `http://tauri.localhost`, and the local Vite dev origin; set `APP_DESKTOP_ORIGINS` to a comma-separated list for other desktop origins. JSON request and response keys use camelCase. All authenticated requests send `Authorization: Bearer <token>`. Errors use `{ "code": "...", "message": "..." }`; 400 invalid parameters, 401 absent/invalid/expired account or token, 403 wrong role, 404 missing resource, 409 duplicate phone or deletion conflict, 503 price source failure. List responses use `{items,page,pageSize,total,totalPages}` with fixed page size 10 and one-based `page`.
 
 ## Authentication
 
@@ -23,7 +23,7 @@ Phone input accepts E.164 or a mainland China 11-digit mobile number, stored as 
 | PATCH | `/me/config` | any of `minPrice`, `maxPrice`; JSON null clears a side | saved configuration |
 | GET | `/gold-price/latest` | none | `{price,unit,currency,precision,dataTime}` |
 
-Price values are exact decimal values with up to four fractional digits, nonnegative; both thresholds must satisfy `minPrice < maxPrice`. The configured gold price URL points to the API endpoint, so the desktop app sends its Bearer token. `APP_PRICE_SOURCE_URL` is a server-managed JSON endpoint with `price` as a decimal number or string and `dataTime` as an ISO 8601 timestamp with offset. It must use the same currency and unit as configured. The API uses three-second connection and five-second read timeouts and returns 503 for malformed or unavailable data. The source has no cache in this version.
+Price values in responses are decimal strings to preserve precision in JavaScript. PATCH accepts decimal strings or JSON numbers. Values are exact decimal values with up to four fractional digits, nonnegative; both thresholds must satisfy `minPrice < maxPrice`. The configured gold price URL points to the API endpoint, so the desktop app sends its Bearer token. `APP_PRICE_SOURCE_URL` is a server-managed JSON endpoint with `price` as a decimal number or string and `dataTime` as an ISO 8601 timestamp with offset. It must use the same currency and unit as configured. The API uses three-second connection and five-second read timeouts and returns 503 for malformed or unavailable data. The source has no cache in this version.
 
 ## Admin endpoints
 

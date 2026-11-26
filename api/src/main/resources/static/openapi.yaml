@@ -1,10 +1,11 @@
+---
 openapi: 3.0.3
 info:
   title: Gold Price Monitor API
   version: 1.0.0
   description: Field definitions and error codes are documented in api/API_CONTRACT.md.
 servers:
-  - url: /api/v1
+- url: "/api/v1"
 components:
   securitySchemes:
     bearerAuth:
@@ -14,112 +15,1026 @@ components:
   schemas:
     Error:
       type: object
-      required: [code, message]
+      required:
+      - code
+      - message
       properties:
-        code: {type: string}
-        message: {type: string}
+        code:
+          type: string
+        message:
+          type: string
     Token:
       type: object
-      required: [token, expiresAt, role, userId]
+      required:
+      - token
+      - expiresAt
+      - role
+      - userId
       properties:
-        token: {type: string}
-        expiresAt: {type: string, format: date-time}
-        role: {type: string, enum: [USER, ADMIN]}
-        userId: {type: integer}
+        token:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum:
+          - USER
+          - ADMIN
+        userId:
+          type: integer
     Page:
       type: object
-      required: [items, page, pageSize, total, totalPages]
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      - totalPages
       properties:
-        items: {type: array, items: {type: object}}
-        page: {type: integer, minimum: 1}
-        pageSize: {type: integer, example: 10}
-        total: {type: integer}
-        totalPages: {type: integer}
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          type: integer
+          minimum: 1
+        pageSize:
+          type: integer
+          example: 10
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    RegisteredUser:
+      type: object
+      properties:
+        id: &1
+          type: integer
+        phone: &2
+          type: string
+      required:
+      - id
+      - phone
+    Session:
+      type: object
+      properties:
+        userId: *1
+        role:
+          type: string
+          enum:
+          - USER
+          - ADMIN
+        expiresAt: &3
+          type: string
+          format: date-time
+      required:
+      - userId
+      - role
+      - expiresAt
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+      - success
+    Config:
+      type: object
+      properties:
+        level: *1
+        monitorIntervalSeconds: *1
+        minPrice:
+          type: number
+          nullable: true
+        maxPrice:
+          type: number
+          nullable: true
+        goldPriceUrl: *2
+        unit: *2
+        currency: *2
+        precision: *1
+      required:
+      - level
+      - monitorIntervalSeconds
+      - minPrice
+      - maxPrice
+      - goldPriceUrl
+      - unit
+      - currency
+      - precision
+    Price:
+      type: object
+      properties:
+        price:
+          type: number
+        dataTime: *3
+        unit: *2
+        currency: *2
+        precision: *1
+      required:
+      - price
+      - dataTime
+      - unit
+      - currency
+      - precision
+    User:
+      type: object
+      properties:
+        id: *1
+        phone: *2
+        level: *1
+        status:
+          type: integer
+          enum:
+          - 0
+          - 1
+        validFromDate:
+          type: string
+          format: date
+          nullable: true
+        validToDate:
+          type: string
+          format: date
+          nullable: true
+        createTime: *3
+      required:
+      - id
+      - phone
+      - status
+      - createTime
+    Payment:
+      type: object
+      properties:
+        id: *1
+        userId: *1
+        phone: *2
+        skuId: *1
+        skuName: *2
+        paymentNumber: *2
+        thirdpartyNumber:
+          type: string
+          nullable: true
+        payTime:
+          type: string
+          format: date-time
+          nullable: true
+        createTime: *3
+      required:
+      - id
+      - userId
+      - skuId
+      - paymentNumber
+      - createTime
+    Sku:
+      type: object
+      properties:
+        id: *1
+        name: *2
+        price:
+          type: integer
+          minimum: 0
+        status:
+          type: integer
+          enum:
+          - 0
+          - 1
+        sortOrder: *1
+        createTime: *3
+      required:
+      - id
+      - name
+      - price
+      - status
+      - sortOrder
+      - createTime
+    UserPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/User"
+        page: *1
+        pageSize:
+          type: integer
+          example: 10
+        total: *1
+        totalPages: *1
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      - totalPages
+    PaymentPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Payment"
+        page: *1
+        pageSize:
+          type: integer
+          example: 10
+        total: *1
+        totalPages: *1
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      - totalPages
+    SkuPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            "$ref": "#/components/schemas/Sku"
+        page: *1
+        pageSize:
+          type: integer
+          example: 10
+        total: *1
+        totalPages: *1
+      required:
+      - items
+      - page
+      - pageSize
+      - total
+      - totalPages
+    UserStatus:
+      type: object
+      properties:
+        id: *1
+        status:
+          type: integer
+          enum:
+          - 0
+          - 1
+      required:
+      - id
+      - status
+    UserValidity:
+      type: object
+      properties:
+        id: *1
+        validFromDate:
+          type: string
+          format: date
+          nullable: true
+        validToDate:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - id
+      - validFromDate
+      - validToDate
 security:
-  - bearerAuth: []
+- bearerAuth: []
 paths:
-  /auth/register:
+  "/auth/register":
     post:
       security: []
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [phone, password], properties: {phone: {type: string}, password: {type: string}}}}}}
-      responses: {'200': {description: Registered user}, '400': {description: Invalid parameter}, '409': {description: Phone exists}}
-  /auth/login:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - phone
+              - password
+              properties:
+                phone:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Registered user
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/RegisteredUser"
+        '400':
+          description: Invalid parameter
+        '409':
+          description: Phone exists
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/auth/login":
     post:
       security: []
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [phone, password], properties: {phone: {type: string}, password: {type: string}}}}}}
-      responses: {'200': {description: Signed token, content: {application/json: {schema: {$ref: '#/components/schemas/Token'}}}}, '401': {description: Invalid credentials}}
-  /admin/auth/login:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - phone
+              - password
+              properties:
+                phone:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Signed token
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Token"
+        '401':
+          description: Invalid credentials
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/auth/login":
     post:
       security: []
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [username, password], properties: {username: {type: string}, password: {type: string}}}}}}
-      responses: {'200': {description: Signed admin token, content: {application/json: {schema: {$ref: '#/components/schemas/Token'}}}}, '401': {description: Invalid credentials}}
-  /auth/session:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - username
+              - password
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Signed admin token
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Token"
+        '401':
+          description: Invalid credentials
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/auth/session":
     get:
-      responses: {'200': {description: Current session}, '401': {description: Unauthorized}}
-  /auth/refresh:
+      responses:
+        '200':
+          description: Current session
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Session"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/auth/refresh":
     post:
-      responses: {'200': {description: Rotated token, content: {application/json: {schema: {$ref: '#/components/schemas/Token'}}}}, '401': {description: Unauthorized}}
-  /auth/logout:
+      responses:
+        '200':
+          description: Rotated token
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Token"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/auth/logout":
     post:
-      responses: {'200': {description: Session revoked}, '401': {description: Unauthorized}}
-  /me/config:
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Success"
+        '401':
+          description: Unauthorized
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/me/config":
     get:
-      responses: {'200': {description: Current user configuration}, '401': {description: Unauthorized}, '403': {description: Forbidden}}
+      responses:
+        '200':
+          description: Current user configuration
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Config"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
     patch:
-      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {minPrice: {type: number, nullable: true}, maxPrice: {type: number, nullable: true}}}}}}
-      responses: {'200': {description: Saved configuration}, '400': {description: Invalid thresholds}}
-  /gold-price/latest:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                minPrice:
+                  type: number
+                  nullable: true
+                maxPrice:
+                  type: number
+                  nullable: true
+      responses:
+        '200':
+          description: Saved configuration
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Config"
+        '400':
+          description: Invalid thresholds
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/gold-price/latest":
     get:
-      responses: {'200': {description: Latest normalized price}, '503': {description: Source unavailable}}
-  /admin/users:
+      responses:
+        '200':
+          description: Latest normalized price
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Price"
+        '503':
+          description: Source unavailable
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/users":
     get:
       parameters:
-        - {name: page, in: query, schema: {type: integer, minimum: 1}}
-        - {name: phone, in: query, schema: {type: string}}
-        - {name: status, in: query, schema: {type: integer, enum: [0, 1]}}
-      responses: {'200': {description: Paged users}}
-  /admin/users/{id}/password:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: phone
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: integer
+          enum:
+          - 0
+          - 1
+      responses:
+        '200':
+          description: Paged users
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserPage"
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/users/{id}/password":
     put:
-      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [password], properties: {password: {type: string}}}}}}
-      responses: {'200': {description: Password changed}, '404': {description: User missing}}
-  /admin/users/{id}/status:
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - password
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Success"
+        '404':
+          description: User missing
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/users/{id}/status":
     patch:
-      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [status], properties: {status: {type: integer, enum: [0, 1]}}}}}}
-      responses: {'200': {description: Status changed}, '404': {description: User missing}}
-  /admin/users/{id}/validity:
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - status
+              properties:
+                status:
+                  type: integer
+                  enum:
+                  - 0
+                  - 1
+      responses:
+        '200':
+          description: Status changed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserStatus"
+        '404':
+          description: User missing
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/users/{id}/validity":
     patch:
-      parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
-      requestBody: {required: true, content: {application/json: {schema: {type: object, properties: {validFromDate: {type: string, format: date, nullable: true}, validToDate: {type: string, format: date, nullable: true}}}}}}
-      responses: {'200': {description: Dates changed}, '400': {description: Invalid range}, '404': {description: User missing}}
-  /admin/payments:
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                validFromDate:
+                  type: string
+                  format: date
+                  nullable: true
+                validToDate:
+                  type: string
+                  format: date
+                  nullable: true
+      responses:
+        '200':
+          description: Dates changed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/UserValidity"
+        '400':
+          description: Invalid range
+        '404':
+          description: User missing
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/payments":
     get:
       parameters:
-        - {name: page, in: query, schema: {type: integer, minimum: 1}}
-        - {name: userId, in: query, schema: {type: integer}}
-        - {name: paymentNumber, in: query, schema: {type: string}}
-        - {name: createdFrom, in: query, schema: {type: string, format: date-time}}
-        - {name: createdTo, in: query, schema: {type: string, format: date-time}}
-        - {name: paidFrom, in: query, schema: {type: string, format: date-time}}
-        - {name: paidTo, in: query, schema: {type: string, format: date-time}}
-      responses: {'200': {description: Paged payments}}
-  /admin/skus:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: userId
+        in: query
+        schema:
+          type: integer
+      - name: paymentNumber
+        in: query
+        schema:
+          type: string
+      - name: createdFrom
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: createdTo
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: paidFrom
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: paidTo
+        in: query
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Paged payments
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PaymentPage"
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/skus":
     get:
       parameters:
-        - {name: page, in: query, schema: {type: integer, minimum: 1}}
-        - {name: name, in: query, schema: {type: string}}
-        - {name: status, in: query, schema: {type: integer, enum: [0, 1]}}
-      responses: {'200': {description: Paged SKUs}}
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+      - name: name
+        in: query
+        schema:
+          type: string
+      - name: status
+        in: query
+        schema:
+          type: integer
+          enum:
+          - 0
+          - 1
+      responses:
+        '200':
+          description: Paged SKUs
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/SkuPage"
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
     post:
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [name, price, status, sortOrder], properties: {name: {type: string, maxLength: 120}, price: {type: integer, minimum: 0}, status: {type: integer, enum: [0, 1]}, sortOrder: {type: integer}}}}}}
-      responses: {'201': {description: Created SKU}}
-  /admin/skus/{id}:
-    parameters: [{name: id, in: path, required: true, schema: {type: integer}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - name
+              - price
+              - status
+              - sortOrder
+              properties:
+                name:
+                  type: string
+                  maxLength: 120
+                price:
+                  type: integer
+                  minimum: 0
+                status:
+                  type: integer
+                  enum:
+                  - 0
+                  - 1
+                sortOrder:
+                  type: integer
+      responses:
+        '201':
+          description: Created SKU
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Sku"
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/admin/skus/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
     get:
-      responses: {'200': {description: SKU}, '404': {description: Missing}}
+      responses:
+        '200':
+          description: SKU
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Sku"
+        '404':
+          description: Missing
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
     put:
-      requestBody: {required: true, content: {application/json: {schema: {type: object, required: [name, price, status, sortOrder], properties: {name: {type: string}, price: {type: integer}, status: {type: integer}, sortOrder: {type: integer}}}}}}
-      responses: {'200': {description: Updated SKU}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - name
+              - price
+              - status
+              - sortOrder
+              properties:
+                name:
+                  type: string
+                price:
+                  type: integer
+                status:
+                  type: integer
+                sortOrder:
+                  type: integer
+      responses:
+        '200':
+          description: Updated SKU
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Sku"
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Resource missing
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
     delete:
-      responses: {'200': {description: Deleted}, '409': {description: Referenced by payment}}
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Success"
+        '409':
+          description: Referenced by payment
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: Resource missing
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"

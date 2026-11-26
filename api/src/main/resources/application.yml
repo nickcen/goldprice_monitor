@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/goldprice_monitor?connectionTimeZone=UTC}
-    username: ${DB_USER:goldprice_monitor}
-    password: ${DB_PASSWORD:}
+    username: ${DB_USER:test}
+    password: ${DB_PASSWORD:test}
     driver-class-name: com.mysql.cj.jdbc.Driver
   flyway:
     enabled: true

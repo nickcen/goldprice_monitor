@@ -30,6 +30,7 @@
 | 方法与建议路径 | 功能与主要数据 |
 | --- | --- |
 | `GET /api/v1/admin/users` | 分页查询用户；按手机号或状态筛选。返回用户 ID、手机号、等级、状态、有效期起止值和创建时间，以及分页信息。 |
+| `GET /api/v1/admin/users/{id}` | 查看用户详情，返回列表同字段；关联支付记录使用按用户筛选的支付列表接口。 |
 | `PUT /api/v1/admin/users/{id}/password` | 修改指定用户密码；校验新密码，仅保存哈希，不返回原密码或哈希。确认密码一致性由前端校验，服务端仍校验密码规则。 |
 | `PATCH /api/v1/admin/users/{id}/status` | 将状态设为可用或不可用；校验枚举值，返回保存后的状态。 |
 | `PATCH /api/v1/admin/users/{id}/validity` | 修改 `valid_from_date` 和 `valid_to_date`；任一侧可为空，两侧均有值时结束日期必须晚于开始日期，返回保存结果。 |

@@ -30,6 +30,7 @@ Price values are exact decimal values with up to four fractional digits, nonnega
 | Method | Path | Body / filters | Response |
 | --- | --- | --- | --- |
 | GET | `/admin/users` | `page`, optional `phone`, `status` | paged users sorted by creation descending, then ID |
+| GET | `/admin/users/{id}` | none | user details without password hash |
 | PUT | `/admin/users/{id}/password` | `{password}` | `{success:true}` |
 | PATCH | `/admin/users/{id}/status` | `{status:0\|1}` | `{id,status}` |
 | PATCH | `/admin/users/{id}/validity` | `{validFromDate,validToDate}` | saved dates; null means unbounded |

@@ -184,6 +184,7 @@ public class ApiController {
     private Map<String,Object> publicRow(Map<String,Object> row) {
         Map<String,Object> out=new LinkedHashMap<>();
         row.forEach((key,value)->{
+            if (key.toLowerCase(Locale.ROOT).contains("password")) return;
             if(value instanceof java.sql.Timestamp t) out.put(key,t.toInstant().toString());
             else if(value instanceof java.sql.Date d) out.put(key,d.toLocalDate().toString());
             else if(value instanceof LocalDateTime d) out.put(key,d.toInstant(ZoneOffset.UTC).toString());
@@ -203,6 +204,12 @@ public class ApiController {
         admin(r); String sql="SELECT u.id,u.phone,c.level,u.status,u.valid_from_date AS validFromDate,u.valid_to_date AS validToDate,u.create_time AS createTime FROM `user` u LEFT JOIN user_config c ON c.user_id=u.id WHERE 1=1"; List<Object> a=new ArrayList<>();
         if(phone!=null && !phone.isBlank()){sql+=" AND u.phone LIKE ?";a.add("%"+phone+"%");} if(status!=null){checkStatus(status);sql+=" AND u.status=?";a.add(status);}
         return paged(sql,"ORDER BY u.create_time DESC,u.id DESC",a,page(page));
+    }
+    @GetMapping("/admin/users/{id}") public Map<String,Object> getUser(HttpServletRequest r,@PathVariable int id) {
+        admin(r);
+        Map<String,Object> u=one("SELECT u.id,u.phone,c.level,u.status,u.valid_from_date AS validFromDate,u.valid_to_date AS validToDate,u.create_time AS createTime FROM `user` u LEFT JOIN user_config c ON c.user_id=u.id WHERE u.id=?",id);
+        if(u==null) throw error(HttpStatus.NOT_FOUND,"NOT_FOUND","用户不存在");
+        return publicRow(u);
     }
     private void checkStatus(Integer s) { if(s==null || (s!=0 && s!=1)) throw error(HttpStatus.BAD_REQUEST,"INVALID_PARAMETER","状态只能为0或1"); }
     private void existsUser(int id) { if(one("SELECT id FROM `user` WHERE id=?",id)==null) throw error(HttpStatus.NOT_FOUND,"NOT_FOUND","用户不存在"); }

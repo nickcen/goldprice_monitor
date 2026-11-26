@@ -1,4 +1,8 @@
 spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/goldprice_monitor?connectionTimeZone=UTC}
     username: ${DB_USER:test}
@@ -14,6 +18,9 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 management:
+  health:
+    redis:
+      enabled: false
   endpoints:
     web:
       exposure:

@@ -30,7 +30,7 @@ const request = <T>(path: string, options: { method?: string; body?: unknown; to
 };
 const session = new Session(request, () => { configRequest++; monitor.stop(); config = null; price = undefined; points = []; page = 'login'; void trayStatus('未登录'); render(); });
 const monitor = new Monitor(
-  () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config); },
+  () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config, path => authorized<GoldPrice>(path)); },
   (nextPrice, error) => { price = nextPrice; priceError = error; void trayStatus(nextPrice ? `${formatPrice(nextPrice.price)} ${nextPrice.currency}/${nextPrice.unit}${error ? '（非最新）' : ''}` : '获取中'); if (page === 'home') render(); },
   (nextPrice, threshold, direction) => { void notify('金价监控提醒', `当前金价 ${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}，${direction === 'low' ? '低于' : '高于'}阈值 ${formatPrice(threshold)}`).catch(() => { message = '系统通知不可用，请检查通知权限'; render(); }); },
   nextPrice => { void savePoint(nextPrice).then(() => refreshHistory()).catch(error => { historyError = errorText(error); if (page === 'home') render(); }); },

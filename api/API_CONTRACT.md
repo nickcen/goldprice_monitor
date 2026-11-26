@@ -42,3 +42,7 @@ Price values in responses are decimal strings to preserve precision in JavaScrip
 | DELETE | `/admin/skus/{id}` | none | `{success:true}`; 409 if referenced by payment |
 
 Time range filters are half-open `[from,to)` and may be combined. Timestamp inputs and outputs use ISO 8601 with UTC offset; validity dates use `YYYY-MM-DD` and `[validFromDate,validToDate)` semantics. SKU prices are integer cents. User/payment/SKU list fields match the names in responses and database records; user password hashes never appear.
+
+### 按时点查询金价
+
+`GET /api/v1/gold-price/at?time=<ISO8601>` 需要用户 Bearer token。时间必须包含 UTC 偏移量，服务器按 UTC 分钟查询 `gold_price`，返回 `{price,unit,currency,precision,dataTime}`，其中 `dataTime` 是分钟起点。不存在的分钟返回 `404 PRICE_NOT_FOUND`，无效时间返回 `400 INVALID_PARAMETER`。服务器每分钟从默认数据源采集，查询结果在 Redis 按分钟缓存 5 分钟；Redis 不可用时从数据库读取。

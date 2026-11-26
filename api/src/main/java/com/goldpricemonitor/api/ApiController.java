@@ -23,8 +23,8 @@ import java.security.MessageDigest;
 import java.time.*;
 import java.util.*;
 
-@RestController
-@RequestMapping("/api/v1")
+// Legacy implementation retained for reference; the controllers in admin/ and user/
+// own the HTTP routes. Registering both implementations causes duplicate mappings.
 public class ApiController {
     private final JdbcTemplate db;
     private final ObjectMapper json;

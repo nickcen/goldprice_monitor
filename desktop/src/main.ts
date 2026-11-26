@@ -1,6 +1,7 @@
 import './style.css';
 import { ApiError, configuredApiClient } from './api/client';
 import type { Config, GoldPrice } from './api/contracts';
+import { fetchGoldPrice } from './api/goldPrice';
 import { Session } from './state/session';
 import { Monitor, compareDecimal } from './state/monitor';
 import { notify, trayStatus } from './platform/desktop';
@@ -24,7 +25,7 @@ const request = <T>(path: string, options: { method?: string; body?: unknown; to
 };
 const session = new Session(request, () => { monitor.stop(); config = null; price = undefined; page = 'login'; void trayStatus('未登录'); render(); });
 const monitor = new Monitor(
-  () => authorized<GoldPrice>('/api/v1/gold-price/latest'),
+  () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config); },
   (nextPrice, error) => { price = nextPrice; priceError = error; void trayStatus(nextPrice ? `${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}${error ? '（非最新）' : ''}` : '获取中'); render(); },
   (nextPrice, threshold, direction) => { void notify('金价监控提醒', `当前金价 ${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}，${direction === 'low' ? '低于' : '高于'}阈值 ${threshold}`).catch(() => { message = '系统通知不可用，请检查通知权限'; render(); }); },
 );

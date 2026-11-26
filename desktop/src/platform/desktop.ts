@@ -10,5 +10,6 @@ export async function notify(title: string, body: string): Promise<void> {
   if (!isTauri()) return;
   let allowed = await isPermissionGranted();
   if (!allowed) allowed = (await requestPermission()) === 'granted';
-  if (allowed) sendNotification({ title, body });
+  if (!allowed) throw new Error('系统通知权限未授予');
+  sendNotification({ title, body });
 }

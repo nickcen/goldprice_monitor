@@ -27,6 +27,36 @@ describe('monitor', () => {
     expect(states[1]).toBe('99');
     monitor.stop(); vi.useRealTimers();
   });
+  it('uses strict high and low thresholds and ignores unset thresholds', async () => {
+    vi.useFakeTimers();
+    const prices = ['100', '200', '201', '202', '200', '201', '99'];
+    const alerts: string[] = [];
+    const monitor = new Monitor(async () => quote(prices.shift()!), () => {}, (_, __, zone) => alerts.push(zone));
+    monitor.start(config);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(alerts).toEqual(['high', 'high', 'low']);
+    monitor.stop();
+    const withoutHigh = new Monitor(async () => quote('201'), () => {}, (_, __, zone) => alerts.push(zone));
+    withoutHigh.start({ ...config, maxPrice: null });
+    await flush();
+    expect(alerts).toEqual(['high', 'high', 'low']);
+    withoutHigh.stop();
+    vi.useRealTimers();
+  });
+  it('alerts again when price unit changes while thresholds stay the same', async () => {
+    vi.useFakeTimers();
+    const alerts: string[] = [];
+    let unit = 'gram';
+    const monitor = new Monitor(async () => ({ ...quote('99'), unit }), () => {}, (_, __, zone) => alerts.push(zone));
+    monitor.start(config);
+    await flush();
+    unit = 'ounce';
+    monitor.start({ ...config, unit });
+    await flush();
+    expect(alerts).toEqual(['low', 'low']);
+    monitor.stop();
+    vi.useRealTimers();
+  });
   it('polls immediately and then at the configured interval, stopping cleanly', async () => {
     vi.useFakeTimers();
     const fetchPrice = vi.fn(async () => quote('150'));

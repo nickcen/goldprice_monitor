@@ -20,7 +20,7 @@ export class Monitor {
   private lastZone: 'low' | 'high' | 'normal' = 'normal';
   private thresholds = '';
   private lastPrice?: GoldPrice;
-  constructor(private fetchPrice: () => Promise<GoldPrice>, private onState: (price: GoldPrice | undefined, error: string | null) => void, private onAlert: (price: GoldPrice, threshold: string | number, direction: 'low' | 'high') => void) {}
+  constructor(private fetchPrice: () => Promise<GoldPrice>, private onState: (price: GoldPrice | undefined, error: string | null) => void, private onAlert: (price: GoldPrice, threshold: string | number, direction: 'low' | 'high') => void, private onSuccess?: (price: GoldPrice) => void) {}
   start(config: Config): void {
     if (!Number.isSafeInteger(config.monitorIntervalSeconds) || config.monitorIntervalSeconds <= 0) {
       throw new Error('监控频次必须为正整数秒');
@@ -45,6 +45,7 @@ export class Monitor {
         if (price.unit !== config.unit || price.currency !== config.currency || price.precision !== config.precision) throw new Error('金价单位与监控配置不一致');
         this.lastPrice = price;
         this.onState(price, null);
+        this.onSuccess?.(price);
         const zone = config.minPrice != null && compareDecimal(price.price, config.minPrice) < 0 ? 'low' : config.maxPrice != null && compareDecimal(price.price, config.maxPrice) > 0 ? 'high' : 'normal';
         if (zone !== this.lastZone && zone !== 'normal') this.onAlert(price, zone === 'low' ? config.minPrice! : config.maxPrice!, zone);
         this.lastZone = zone;

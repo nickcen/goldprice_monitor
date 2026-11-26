@@ -31,7 +31,7 @@ export class Monitor {
     const sameThresholds = thresholds === this.thresholds;
     this.stop();
     this.thresholds = thresholds;
-    if (sameThresholds) this.lastZone = previousZone;
+    if (sameThresholds && previousPrice && previousPrice.unit === config.unit && previousPrice.currency === config.currency && previousPrice.precision === config.precision) this.lastZone = previousZone;
     if (previousPrice && previousPrice.unit === config.unit && previousPrice.currency === config.currency && previousPrice.precision === config.precision) this.lastPrice = previousPrice;
     const generation = this.generation;
     const interval = config.monitorIntervalSeconds * 1000;

@@ -152,7 +152,7 @@ public class ApiController {
         Map<String,Object> out=new LinkedHashMap<>();
         out.put("level",c.get("level")); out.put("monitorIntervalSeconds",c.get("monitor_interval_seconds"));
         out.put("minPrice",c.get("min_price")==null?null:((BigDecimal)c.get("min_price")).toPlainString()); out.put("maxPrice",c.get("max_price")==null?null:((BigDecimal)c.get("max_price")).toPlainString());
-        out.put("goldPriceUrl",c.get("gold_price_url")); out.put("unit",unit); out.put("currency",currency); out.put("precision",4);
+        out.put("goldPriceUrl",c.get("gold_price_url")); out.put("unit",unit); out.put("currency",currency); out.put("precision",2);
         return out;
     }
     @GetMapping("/me/config") public Map<String,Object> getConfig(HttpServletRequest r) { return config(user(r).id); }
@@ -167,8 +167,8 @@ public class ApiController {
     private BigDecimal decimal(JsonNode node) {
         if(node.isNull()) return null;
         if(!node.isNumber() && !node.isTextual()) throw error(HttpStatus.BAD_REQUEST,"INVALID_PARAMETER","价格格式无效");
-        try { BigDecimal n=new BigDecimal(node.asText()); if(n.signum()<0 || n.scale()>4 || n.precision()>18) throw new NumberFormatException(); return n; }
-        catch(NumberFormatException e){ throw error(HttpStatus.BAD_REQUEST,"INVALID_PARAMETER","价格须为非负且最多四位小数"); }
+        try { BigDecimal n=new BigDecimal(node.asText()); if(n.signum()<0 || n.scale()>2 || n.precision()>18) throw new NumberFormatException(); return n; }
+        catch(NumberFormatException e){ throw error(HttpStatus.BAD_REQUEST,"INVALID_PARAMETER","价格须为非负且最多两位小数"); }
     }
     @GetMapping("/gold-price/latest") public Map<String,Object> latest(HttpServletRequest r) {
         user(r);
@@ -189,7 +189,7 @@ public class ApiController {
         BigDecimal price=decimal(value);
         if(price==null) throw new IllegalArgumentException("Missing price");
         Instant time=coinApi?Instant.now():Instant.parse(node.path("dataTime").asText());
-        return Map.of("price",price.toPlainString(),"unit",unit,"currency",currency,"precision",4,"dataTime",time.toString());
+        return Map.of("price",price.toPlainString(),"unit",unit,"currency",currency,"precision",2,"dataTime",time.toString());
     }
 
     private Map<String,Object> publicRow(Map<String,Object> row) {

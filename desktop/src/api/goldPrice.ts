@@ -20,7 +20,7 @@ export async function fetchGoldPrice(config: Config): Promise<GoldPrice> {
   if (coinApi && (data.status !== true || data.code !== 1)) throw new Error('金价数据源返回失败');
   const rawPrice = coinApi ? data.data : data.price;
   if ((typeof rawPrice !== 'string' && typeof rawPrice !== 'number') ||
-      !/^\d+(?:\.\d{1,4})?$/.test(String(rawPrice))) throw new Error('金价数据格式无效');
+      !/^\d+(?:\.\d{1,2})?$/.test(String(rawPrice))) throw new Error('金价数据格式无效');
   const dataTime = coinApi ? new Date().toISOString() : data.dataTime;
   if (typeof dataTime !== 'string' || Number.isNaN(Date.parse(dataTime))) throw new Error('金价数据时间无效');
   return { price: String(rawPrice), unit: config.unit, currency: config.currency,

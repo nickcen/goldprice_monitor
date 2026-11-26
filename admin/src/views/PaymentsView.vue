@@ -1,0 +1,11 @@
+<template><div class="page"><h1>支付记录</h1><div class="filters"><el-input v-model="userId" placeholder="用户 ID" clearable /><el-input v-model="number" placeholder="系统支付单号" clearable /><el-date-picker v-model="created" type="datetimerange" value-format="x" start-placeholder="创建开始" end-placeholder="创建结束" /><el-date-picker v-model="paid" type="datetimerange" value-format="x" start-placeholder="支付开始" end-placeholder="支付结束" /><el-button type="primary" @click="search">查询</el-button></div><el-alert v-if="error" :title="error" type="error" :closable="false" /><el-table v-loading="loading" :data="data.items" empty-text="暂无支付记录"><el-table-column prop="id" label="ID" /><el-table-column label="用户"><template #default="{row}">{{ row.userId }} · {{ row.phone }}</template></el-table-column><el-table-column label="商品"><template #default="{row}">{{ row.skuId }} · {{ row.skuName }}</template></el-table-column><el-table-column prop="paymentNumber" label="系统支付单号" /><el-table-column label="第三方支付单号"><template #default="{row}">{{ row.thirdpartyNumber ?? '—' }}</template></el-table-column><el-table-column label="支付时间"><template #default="{row}">{{ row.payTime ?? '—' }}</template></el-table-column><el-table-column prop="createTime" label="创建时间" /></el-table><el-pagination v-model:current-page="page" :page-size="10" layout="prev, pager, next, total" :total="data.total" @current-change="load" /></div></template>
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { apiRequest, query, type Page, type Payment } from '../api/client'
+const userId=ref(''), number=ref(''), created=ref<[string,string]|null>(null), paid=ref<[string,string]|null>(null), page=ref(1), loading=ref(false), error=ref('')
+const data=ref<Page<Payment>>({items:[],page:1,pageSize:10,total:0,totalPages:0})
+function iso(value?:string){return value?new Date(Number(value)).toISOString():undefined}
+async function load(){loading.value=true;error.value='';try{data.value=await apiRequest(`/api/v1/admin/payments?${query({page:page.value,userId:userId.value,paymentNumber:number.value,createdFrom:iso(created.value?.[0]),createdTo:iso(created.value?.[1]),paidFrom:iso(paid.value?.[0]),paidTo:iso(paid.value?.[1])})}`)}catch(e){error.value=e instanceof Error?e.message:'查询失败'}finally{loading.value=false}}
+function search(){page.value=1;void load()}
+onMounted(load)
+</script>

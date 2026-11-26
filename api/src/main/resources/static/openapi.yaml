@@ -608,6 +608,39 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Error"
+  "/admin/users/{id}":
+    get:
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: User details without password hash
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/User"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: User missing
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
   "/admin/users/{id}/password":
     put:
       parameters:

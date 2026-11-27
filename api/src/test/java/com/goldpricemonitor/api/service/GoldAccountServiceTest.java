@@ -5,6 +5,8 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -15,6 +17,65 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GoldAccountServiceTest {
+    @Test void sellGrabcoinUsesOnlyTodayBubblesAndExactWeight() throws Exception {
+        JdbcDataSource source = new JdbcDataSource();
+        source.setURL("jdbc:h2:mem:gold_sell_today_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
+        JdbcTemplate db = new JdbcTemplate(source);
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        AtomicReference<String> submitted = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/api/grabcoin/chances/bubbles", exchange -> {
+            byte[] response = ("{\"status\":true,\"data\":{\"bubbles\":[{\"chanceNo\":\"old\",\"weight\":1,\"createTime\":\"" + today.minusDays(1) + "T12:00:00\"},{\"chanceNo\":\"today\",\"weight\":1.0,\"createTime\":\"" + today + "T12:00:00\"}]}}").getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.createContext("/api/grabcoin/chances/grab-v2", exchange -> {
+            submitted.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));
+            byte[] response = "{\"status\":true,\"data\":{\"grabWeight\":1,\"orderNos\":[\"order-1\"]}}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.start();
+        try {
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            int id = (int) service.create(1,"account",null).get("id");
+            db.update("UPDATE gold_account SET token=? WHERE id=?", "gold-token", id);
+            assertThrows(ApiFault.class, () -> service.sellGrabcoin(2,id,new java.math.BigDecimal("1")));
+            assertThrows(ApiFault.class, () -> service.sellGrabcoin(1,id,new java.math.BigDecimal("2")));
+            assertNull(submitted.get());
+            Map<String,Object> result = service.sellGrabcoin(1,id,new java.math.BigDecimal("1"));
+            assertEquals(true, result.get("success"));
+            assertEquals(1, result.get("completedCount"));
+            assertTrue(submitted.get().contains("\"chanceNo\":\"today\""));
+        } finally { server.stop(0); }
+    }
+    @Test void grabcoinOmitsHistoricalPendingOrders() throws Exception {
+        JdbcDataSource source = new JdbcDataSource();
+        source.setURL("jdbc:h2:mem:gold_grabcoin_today_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
+        JdbcTemplate db = new JdbcTemplate(source);
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/api/grabcoin/chances/bubbles", exchange -> {
+            byte[] response = ("{\"status\":true,\"data\":{\"sellableCount\":0,\"sellableWeight\":1,\"soldCount\":0,\"soldWeight\":0,\"remainingSellableWeight\":1,\"bubbles\":[{\"createTime\":\"" + today.minusDays(1) + "T12:00:00\",\"weight\":1}]}}").getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.createContext("/api/grabcoin/orders", exchange -> {
+            assertTrue(exchange.getRequestURI().getQuery().contains("beginTime=" + today));
+            byte[] response = ("{\"status\":true,\"data\":{\"count\":2,\"list\":[{\"createTime\":\"" + today.minusDays(1) + "T12:00:00\",\"goldPrice\":888,\"totalWeight\":1},{\"createTime\":\"" + today + "T12:00:00\",\"goldPrice\":889,\"totalWeight\":1}]}}").getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.start();
+        try {
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            int id = (int) service.create(1,"account",null).get("id");
+            db.update("UPDATE gold_account SET token=?,is_online=1 WHERE id=?", "gold-token", id);
+            Map<String,Object> result = service.grabcoin(1);
+            Map<?,?> account = (Map<?,?>) ((java.util.List<?>) result.get("accounts")).get(0);
+            assertEquals(0, account.get("availableCount"));
+            assertEquals(1, account.get("listedCount"));
+            assertEquals(1, ((java.util.List<?>) result.get("orders")).size());
+        } finally { server.stop(0); }
+    }
     @Test void sellableUsesOwnedAccountTokenAndReturnsCurrentBubbleCount() throws Exception {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_sellable_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
@@ -25,7 +86,9 @@ class GoldAccountServiceTest {
         server.createContext("/api/grabcoin/chances/bubbles", exchange -> {
             assertEquals("GET", exchange.getRequestMethod());
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
-            byte[] response = "{\"status\":true,\"data\":{\"sellableCount\":5,\"sellableWeight\":2.5,\"bubbles\":[{},{}],\"remainingSellableWeight\":1.0}}".getBytes(StandardCharsets.UTF_8);
+            String today = LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();
+            String yesterday = LocalDate.now(ZoneId.of("Asia/Shanghai")).minusDays(1).toString();
+            byte[] response = ("{\"status\":true,\"data\":{\"sellableCount\":1,\"sellableWeight\":2.0,\"soldCount\":0,\"soldWeight\":0,\"bubbles\":[{\"createTime\":\"" + yesterday + "T00:00:00\",\"weight\":1.0},{\"createTime\":\"" + today + "T00:00:00\",\"weight\":1.0}],\"remainingSellableWeight\":2.0}}").getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200,response.length);
             exchange.getResponseBody().write(response); exchange.close();
         });
@@ -38,9 +101,11 @@ class GoldAccountServiceTest {
             db.update("UPDATE gold_account SET token=? WHERE id=?", "gold-token", id);
             Map<String,Object> result = service.sellable(1,id);
             assertEquals("Bearer gold-token", authorization.get());
-            assertEquals(5, result.get("sellableCount"));
-            assertEquals(2, result.get("remainingSellableCount"));
-            assertEquals(1.0, result.get("remainingSellableWeight"));
+            assertEquals(1, result.get("sellableCount"));
+            assertEquals(0, result.get("soldCount"));
+            assertEquals(0, result.get("soldWeight"));
+            assertEquals(1, result.get("remainingSellableCount"));
+            assertEquals(0, new java.math.BigDecimal("1.0").compareTo((java.math.BigDecimal) result.get("remainingSellableWeight")));
             assertFalse(result.containsKey("token"));
         } finally { server.stop(0); }
     }

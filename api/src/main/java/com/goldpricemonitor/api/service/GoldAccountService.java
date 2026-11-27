@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.sql.Timestamp;
 import java.util.*;
 import okhttp3.OkHttpClient;
@@ -22,6 +24,7 @@ import static com.goldpricemonitor.api.service.ApiSupport.error;
 
 @Service
 public class GoldAccountService {
+    private static final ZoneId GOLD_ZONE = ZoneId.of("Asia/Shanghai");
     private final JdbcTemplate db;
     private final OkHttpClient http;
     private final String baseUrl;
@@ -153,14 +156,91 @@ public class GoldAccountService {
             || !data.path("remainingSellableWeight").isNumber())
             throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回可挂卖数量");
         Map<String,Object> result = new LinkedHashMap<>();
+        LocalDate today = LocalDate.now(GOLD_ZONE);
+        int remainingToday = 0;
+        java.math.BigDecimal remainingWeightToday = java.math.BigDecimal.ZERO;
+        for (JsonNode bubble : data.get("bubbles")) {
+            if (!createdToday(bubble.path("createTime"), today)) continue;
+            remainingToday++;
+            if (!bubble.path("weight").isNumber())
+                throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回气泡克重");
+            remainingWeightToday = remainingWeightToday.add(bubble.get("weight").decimalValue());
+        }
         result.put("sellableCount", data.get("sellableCount").numberValue());
-        result.put("sellableWeight", data.get("sellableWeight").numberValue());
-        result.put("remainingSellableCount", data.get("bubbles").size());
-        result.put("remainingSellableWeight", data.get("remainingSellableWeight").numberValue());
+        result.put("sellableWeight", remainingWeightToday.add(data.path("soldWeight").isNumber() ? data.get("soldWeight").decimalValue() : java.math.BigDecimal.ZERO));
+        result.put("soldCount", data.path("soldCount").isNumber() ? data.get("soldCount").numberValue() : 0);
+        result.put("soldWeight", data.path("soldWeight").isNumber() ? data.get("soldWeight").numberValue() : 0);
+        result.put("remainingSellableCount", remainingToday);
+        result.put("remainingSellableWeight", remainingWeightToday);
         return result;
     }
 
+    private boolean createdToday(JsonNode value, LocalDate today) {
+        String timestamp = value.asText("");
+        if (timestamp.length() < 10) throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回创建时间");
+        try { return LocalDate.parse(timestamp.substring(0, 10)).equals(today); }
+        catch (java.time.format.DateTimeParseException e) {
+            throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务返回无效创建时间");
+        }
+    }
+
+    public Map<String,Object> sellGrabcoin(int userId, int id, java.math.BigDecimal weight) {
+        if (weight == null || weight.signum() <= 0 || weight.scale() > 4)
+            throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "请输入大于0且最多4位小数的克数");
+        weight = weight.stripTrailingZeros();
+        List<String> tokens = db.query("SELECT token FROM gold_account WHERE user_id=? AND id=?",
+            (rs, ignored) -> rs.getString("token"), userId, id);
+        if (tokens.isEmpty()) throw error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在");
+        String token = tokens.get(0);
+        if (token == null || token.isBlank()) throw error(HttpStatus.CONFLICT, "GOLD_ACCOUNT_NOT_LOGGED_IN", "Gold账号尚未登录");
+        JsonNode bubbles = call("/api/grabcoin/chances/bubbles", null, token).path("data").path("bubbles");
+        if (!bubbles.isArray()) throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回可挂卖气泡");
+        LocalDate today = LocalDate.now(GOLD_ZONE);
+        Map<java.math.BigDecimal,List<String>> sums = new LinkedHashMap<>();
+        sums.put(java.math.BigDecimal.ZERO, List.of());
+        for (JsonNode bubble : bubbles) {
+            if (!createdToday(bubble.path("createTime"), today)) continue;
+            String chanceNo = bubble.path("chanceNo").asText("");
+            if (chanceNo.isBlank() || !bubble.path("weight").isNumber())
+                throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务返回无效气泡");
+            java.math.BigDecimal bubbleWeight = bubble.get("weight").decimalValue();
+            if (bubbleWeight.signum() <= 0) continue;
+            Map<java.math.BigDecimal,List<String>> additions = new LinkedHashMap<>();
+            for (var entry : sums.entrySet()) {
+                java.math.BigDecimal sum = entry.getKey().add(bubbleWeight).stripTrailingZeros();
+                if (sum.compareTo(weight) > 0 || sums.containsKey(sum) || additions.containsKey(sum)) continue;
+                List<String> selected = new ArrayList<>(entry.getValue());
+                selected.add(chanceNo);
+                additions.put(sum, selected);
+            }
+            sums.putAll(additions);
+            if (sums.size() > 20000) throw error(HttpStatus.BAD_REQUEST, "WEIGHT_SELECTION_TOO_COMPLEX", "可挂卖气泡组合过多，请缩小克数");
+            if (sums.containsKey(weight)) break;
+        }
+        List<String> selected = sums.get(weight);
+        if (selected == null) throw error(HttpStatus.BAD_REQUEST, "WEIGHT_NOT_AVAILABLE", "今天的可挂卖气泡无法组成该克数");
+        List<String> orderNos = new ArrayList<>();
+        java.math.BigDecimal actualWeight = java.math.BigDecimal.ZERO;
+        int completedChances = 0;
+        for (String chanceNo : selected) {
+            try {
+                JsonNode data = call("/api/grabcoin/chances/grab-v2", Map.of("chanceNo", chanceNo), token).path("data");
+                if (!data.path("grabWeight").isNumber()) throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回挂卖克重");
+                actualWeight = actualWeight.add(data.get("grabWeight").decimalValue());
+                completedChances++;
+                if (data.path("orderNos").isArray()) for (JsonNode orderNo : data.get("orderNos")) orderNos.add(orderNo.asText());
+                else if (data.path("orderNo").isTextual()) orderNos.add(data.get("orderNo").asText());
+            } catch (com.goldpricemonitor.api.ApiFault e) {
+                if (completedChances == 0) throw e;
+                return Map.of("success", false, "completedCount", completedChances, "actualWeight", actualWeight,
+                    "orderNos", orderNos, "message", e.getMessage());
+            }
+        }
+        return Map.of("success", true, "completedCount", completedChances, "actualWeight", actualWeight, "orderNos", orderNos);
+    }
+
     public Map<String,Object> grabcoin(int userId) {
+        LocalDate today = LocalDate.now(GOLD_ZONE);
         List<Map<String,Object>> accounts = new ArrayList<>();
         List<Map<String,Object>> orders = new ArrayList<>();
         for (Map<String,Object> account : list(userId)) {
@@ -173,13 +253,15 @@ public class GoldAccountService {
                 Map<String,Object> chance = sellable(userId, id);
                 summary.put("availableCount", chance.get("remainingSellableCount"));
                 String token = db.queryForObject("SELECT token FROM gold_account WHERE user_id=? AND id=?", String.class, userId, id);
-                int page = 1, count;
+                int page = 1, count, fetched = 0;
                 do {
-                    JsonNode data = call("/api/grabcoin/orders?status=0&page=" + page + "&limit=100", null, token).path("data");
+                    JsonNode data = call("/api/grabcoin/orders?status=0&beginTime=" + today + "&page=" + page + "&limit=100", null, token).path("data");
                     if (!data.path("list").isArray() || !data.path("count").canConvertToInt())
                         throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回挂单记录");
                     count = data.path("count").asInt();
                     for (JsonNode order : data.path("list")) {
+                        fetched++;
+                        if (!createdToday(order.path("createTime"), today)) continue;
                         if (!order.path("goldPrice").isNumber())
                             throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回挂单价格");
                         Map<String,Object> item = new LinkedHashMap<>();
@@ -192,10 +274,10 @@ public class GoldAccountService {
                         orders.add(item);
                     }
                     page++;
-                } while (ordersForAccount(orders, id) < count && page <= 100);
-                if (ordersForAccount(orders, id) < count)
+                } while (fetched < count && page <= 100);
+                if (fetched < count)
                     throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "挂单记录超过查询上限");
-                summary.put("listedCount", count);
+                summary.put("listedCount", ordersForAccount(orders, id));
             } catch (com.goldpricemonitor.api.ApiFault e) {
                 orders.subList(orderStart, orders.size()).clear();
                 summary.put("error", e.getMessage());

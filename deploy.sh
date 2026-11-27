@@ -66,7 +66,7 @@ systemctl enable --now goldprice-monitor
 systemctl restart goldprice-monitor
 systemctl reload nginx
 for attempt in {1..30}; do
-  if curl -fsS http://127.0.0.1:18080/actuator/health | grep -q '"status":"UP"'; then
+  if curl -fs http://127.0.0.1:18080/actuator/health | grep -q '"status":"UP"'; then
     echo 'API healthy'; exit 0
   fi
   sleep 2

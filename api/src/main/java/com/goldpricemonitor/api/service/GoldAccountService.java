@@ -111,12 +111,17 @@ public class GoldAccountService {
     }
 
     private JsonNode call(String path, Map<String,Object> payload) {
+        return call(path, payload, null);
+    }
+
+    private JsonNode call(String path, Map<String,Object> payload, String token) {
         if (baseUrl.isBlank()) throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址未配置");
         URI uri = URI.create(baseUrl + path);
         if (!Set.of("http", "https").contains(uri.getScheme()))
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址无效");
         try {
             Request.Builder request = new Request.Builder().url(uri.toString());
+            if (token != null) request.header("Authorization", "Bearer " + token);
             if (payload == null) request.get();
             else request.post(RequestBody.create(mapper.writeValueAsBytes(payload), okhttp3.MediaType.get("application/json; charset=utf-8")));
             JsonNode result;
@@ -133,6 +138,75 @@ public class GoldAccountService {
             return result;
         } catch (com.goldpricemonitor.api.ApiFault e) { throw e; }
         catch (IOException e) { throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败"); }
+    }
+
+    public Map<String,Object> sellable(int userId, int id) {
+        List<String> tokens = db.query("SELECT token FROM gold_account WHERE user_id=? AND id=?",
+            (rs, ignored) -> rs.getString("token"), userId, id);
+        if (tokens.isEmpty()) throw error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在");
+        String token = tokens.get(0);
+        if (token == null || token.isBlank())
+            throw error(HttpStatus.CONFLICT, "GOLD_ACCOUNT_NOT_LOGGED_IN", "Gold账号尚未登录");
+        JsonNode data = call("/api/grabcoin/chances/bubbles", null, token).path("data");
+        if (!data.isObject() || !data.path("bubbles").isArray()
+            || !data.path("sellableCount").isNumber() || !data.path("sellableWeight").isNumber()
+            || !data.path("remainingSellableWeight").isNumber())
+            throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回可挂卖数量");
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("sellableCount", data.get("sellableCount").numberValue());
+        result.put("sellableWeight", data.get("sellableWeight").numberValue());
+        result.put("remainingSellableCount", data.get("bubbles").size());
+        result.put("remainingSellableWeight", data.get("remainingSellableWeight").numberValue());
+        return result;
+    }
+
+    public Map<String,Object> grabcoin(int userId) {
+        List<Map<String,Object>> accounts = new ArrayList<>();
+        List<Map<String,Object>> orders = new ArrayList<>();
+        for (Map<String,Object> account : list(userId)) {
+            Map<String,Object> summary = new LinkedHashMap<>(account);
+            accounts.add(summary);
+            if (!Boolean.TRUE.equals(account.get("isOnline"))) continue;
+            int id = (int) account.get("id");
+            int orderStart = orders.size();
+            try {
+                Map<String,Object> chance = sellable(userId, id);
+                summary.put("availableCount", chance.get("remainingSellableCount"));
+                String token = db.queryForObject("SELECT token FROM gold_account WHERE user_id=? AND id=?", String.class, userId, id);
+                int page = 1, count;
+                do {
+                    JsonNode data = call("/api/grabcoin/orders?status=0&page=" + page + "&limit=100", null, token).path("data");
+                    if (!data.path("list").isArray() || !data.path("count").canConvertToInt())
+                        throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回挂单记录");
+                    count = data.path("count").asInt();
+                    for (JsonNode order : data.path("list")) {
+                        if (!order.path("goldPrice").isNumber())
+                            throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回挂单价格");
+                        Map<String,Object> item = new LinkedHashMap<>();
+                        item.put("accountId", id);
+                        item.put("username", account.get("username"));
+                        item.put("orderNo", order.path("orderNo").asText(""));
+                        item.put("goldPrice", order.get("goldPrice").numberValue());
+                        item.put("totalWeight", order.path("totalWeight").isNumber() ? order.get("totalWeight").numberValue() : null);
+                        item.put("createTime", order.path("createTime").asText(""));
+                        orders.add(item);
+                    }
+                    page++;
+                } while (ordersForAccount(orders, id) < count && page <= 100);
+                if (ordersForAccount(orders, id) < count)
+                    throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "挂单记录超过查询上限");
+                summary.put("listedCount", count);
+            } catch (com.goldpricemonitor.api.ApiFault e) {
+                orders.subList(orderStart, orders.size()).clear();
+                summary.put("error", e.getMessage());
+            }
+        }
+        orders.sort(Comparator.comparing(o -> new java.math.BigDecimal(o.get("goldPrice").toString())));
+        return Map.of("accounts", accounts, "orders", orders);
+    }
+
+    private int ordersForAccount(List<Map<String,Object>> orders, int id) {
+        return (int) orders.stream().filter(order -> (int) order.get("accountId") == id).count();
     }
 
     public Map<String,Object> passwordCode(int userId, int id) {

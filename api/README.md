@@ -41,4 +41,8 @@ See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret 
 
 桌面端账号管理使用 `/api/v1/me/gold-accounts`（GET、POST），以及 `/{id}`（GET、PATCH、DELETE）；验证码操作使用 `/{id}/send-sms` 和 `/{id}/login`。这些接口需要本产品的 USER Bearer token，且只能访问当前用户自己的记录。列表和详情不返回 Gold 密码或 token。账号密码按此任务要求明文保存在数据库，请限制数据库访问和备份权限。
 
+`GET /api/v1/me/gold-accounts/{id}/sellable` 使用该 Gold 账号已保存的登录 token 查询可挂卖数量，返回 `sellableCount`（今日可挂卖次数）、`sellableWeight`（对应克重）、`remainingSellableCount`（当前气泡数量）和 `remainingSellableWeight`（剩余克重）。账号未登录时返回 `GOLD_ACCOUNT_NOT_LOGGED_IN`。
+
+`GET /api/v1/me/gold-accounts/grabcoin` 汇总当前用户关联账号的剩余可挂单数和待卖出订单数，返回 `accounts` 与 `orders`。`orders` 包含所有在线账号的待卖出订单，按挂单价升序排列；未登录或查询失败的账号在 `accounts` 中显示状态，不计入订单列表。
+
 外部 Gold 服务地址通过 `APP_PRICE_SERVER_BASE_URL` 配置。服务端调用 `/api/User/SendSms` 与 `/api/User/LoginByPhoneAndCode`，当前适配器要求返回 `status: true`，登录响应还需包含 `data.token`。缺少 token 时账号不会变为在线。正式接入前需用服务提供方的响应样例核对该契约。

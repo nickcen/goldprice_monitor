@@ -29,7 +29,7 @@ let configError: string | null = null;
 let message = '';
 let savingConfig = false;
 let configDraft: { min: string; max: string } | null = null;
-let page: 'restoring' | 'login' | 'register' | 'home' | 'account' | 'gold' = setupError ? 'login' : 'restoring';
+let page: 'restoring' | 'login' | 'register' | 'home' | 'account' | 'gold' | 'grabcoin' = setupError ? 'login' : 'restoring';
 const request = <T>(path: string, options: { method?: string; body?: unknown; token?: string } = {}) => {
   if (!api) throw new Error(setupError);
   return api.request<T>(path, options);
@@ -98,7 +98,7 @@ function errorText(error: unknown): string { return error instanceof ApiError &&
 const view = reactive({ page, setupError, config, configError, price, priceError, message, points, historyDay, historyError, savingConfig, configDraft });
 function render(): void { Object.assign(view, { page, config, configError, price, priceError, message, points, historyDay, historyError, savingConfig, configDraft }); }
 function switchAuth(): void { page = page === 'login' ? 'register' : 'login'; message = ''; render(); }
-function navigate(next: 'home' | 'account' | 'gold'): void { page = next; render(); }
+function navigate(next: 'home' | 'account' | 'gold' | 'grabcoin'): void { page = next; render(); }
 function refreshConfig(): void { configDraft = null; void loadConfig().then(() => { message = configError ? '重新获取用户配置失败' : '已获取最新用户配置'; render(); }); }
 const actions = {
   switchAuth,
@@ -138,7 +138,7 @@ async function loadConfig(updateAccountView = true): Promise<void> {
   catch (error) { if (requestId !== configRequest) return; configError = errorText(error); }
   // A focus-triggered refresh can finish between pointerdown and click. Replacing
   // the form then discards the pending submit event and the user's input.
-  if (updateAccountView || (page !== 'account' && page !== 'gold')) render();
+  if (updateAccountView || (page !== 'account' && page !== 'gold' && page !== 'grabcoin')) render();
 }
 async function saveConfig(rawMin: string, rawMax: string): Promise<void> {
   if (!config || savingConfig) return;
@@ -164,7 +164,7 @@ async function saveConfig(rawMin: string, rawMax: string): Promise<void> {
 }
 window.addEventListener('focus', () => void resume());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void resume(); });
-async function resume(): Promise<void> { await session.check(); if (session.token && (page === 'home' || page === 'account' || page === 'gold')) { await loadConfig(false); await maintainHistory(); } }
+async function resume(): Promise<void> { await session.check(); if (session.token && (page === 'home' || page === 'account' || page === 'gold' || page === 'grabcoin')) { await loadConfig(false); await maintainHistory(); } }
 void trayStatus('未登录');
 render();
 if (!setupError) void session.restore().then(ok => { page = ok ? 'home' : 'login'; if (ok) void loadConfig(); else render(); }).catch(() => { page = 'login'; message = '无法读取系统凭据，请检查钥匙串权限'; render(); });

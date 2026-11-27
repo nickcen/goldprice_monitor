@@ -6,6 +6,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.h2.jdbcx.JdbcDataSource;
@@ -14,6 +15,35 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GoldAccountServiceTest {
+    @Test void sellableUsesOwnedAccountTokenAndReturnsCurrentBubbleCount() throws Exception {
+        JdbcDataSource source = new JdbcDataSource();
+        source.setURL("jdbc:h2:mem:gold_sellable_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
+        JdbcTemplate db = new JdbcTemplate(source);
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        AtomicReference<String> authorization = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+        server.createContext("/api/grabcoin/chances/bubbles", exchange -> {
+            assertEquals("GET", exchange.getRequestMethod());
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            byte[] response = "{\"status\":true,\"data\":{\"sellableCount\":5,\"sellableWeight\":2.5,\"bubbles\":[{},{}],\"remainingSellableWeight\":1.0}}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length);
+            exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.start();
+        try {
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            int id = (int) service.create(1,"account",null).get("id");
+            assertThrows(ApiFault.class, () -> service.sellable(2,id));
+            assertThrows(ApiFault.class, () -> service.sellable(1,id));
+            db.update("UPDATE gold_account SET token=? WHERE id=?", "gold-token", id);
+            Map<String,Object> result = service.sellable(1,id);
+            assertEquals("Bearer gold-token", authorization.get());
+            assertEquals(5, result.get("sellableCount"));
+            assertEquals(2, result.get("remainingSellableCount"));
+            assertEquals(1.0, result.get("remainingSellableWeight"));
+            assertFalse(result.containsKey("token"));
+        } finally { server.stop(0); }
+    }
     @Test void passwordCaptchaAndLoginUseStoredCredentialsAndOnlySaveSuccessfulToken() throws Exception {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_password_test;MODE=MySQL;DB_CLOSE_DELAY=-1");

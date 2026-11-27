@@ -49,7 +49,7 @@ watch(() => props.message, value => { if (value === '阈值已保存') dialogVis
         <p class="error">{{ props.configError ?? '正在获取配置' }}</p>
         <ElButton @click="emit('retry')">重试</ElButton>
       </template>
-      <div class="message" role="status">{{ props.message }}</div>
+      <div v-if="props.message && props.message !== '阈值已保存'" class="message" role="status">{{ props.message }}</div>
     </ElCard>
 
     <ElDialog v-model="dialogVisible" title="配置提醒阈值" width="min(480px, 90vw)" :close-on-click-modal="!props.saving"

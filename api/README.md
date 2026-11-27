@@ -33,7 +33,7 @@ mvn spring-boot:run
 
 ## Business API
 
-See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret of at least 32 characters before startup. Set `APP_ADMIN_USERNAME` and `APP_ADMIN_PASSWORD` together to create an initial admin account if it does not exist; changing these environment values does not reset an existing password. `APP_PRICE_SOURCE_URL` defaults to `https://coinapi.gcsgcs.com/api/Accumulate/GetRealTimeGoldPrice` and can be overridden with a trusted JSON price endpoint. This source returns a price without a timestamp, so the API records the fetch time as `dataTime`. `APP_CURRENCY` (default `CNY`), `APP_PRICE_UNIT` (default `gram`), `APP_MONITOR_INTERVAL_SECONDS` (default 60), and `APP_PUBLIC_BASE_URL` (default `http://localhost:8080`) control the initial user configuration. `DB_URL`, `DB_USER`, and `DB_PASSWORD` configure MySQL. `APP_DESKTOP_ORIGINS` sets the comma-separated allowed desktop CORS origins; defaults include macOS Tauri, Windows Tauri, and the local Vite development origin. No admin credentials are committed.
+See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret of at least 32 characters before startup. Set `APP_ADMIN_USERNAME` and `APP_ADMIN_PASSWORD` together to create an initial admin account if it does not exist; changing these environment values does not reset an existing password. `APP_PRICE_SOURCE_URL` defaults to `https://coinapi.gcsgcs.com/api/Accumulate/GetRealTimeGoldPrice` and can be overridden with a trusted JSON price endpoint. This source returns a price without a timestamp, so the API records the fetch time as `dataTime`. `APP_CURRENCY` (default `CNY`), `APP_PRICE_UNIT` (default `gram`), and `APP_MONITOR_INTERVAL_SECONDS` (default 60) control the initial user configuration. `DB_URL`, `DB_USER`, and `DB_PASSWORD` configure MySQL. `APP_DESKTOP_ORIGINS` sets the comma-separated allowed desktop CORS origins; defaults include macOS Tauri, Windows Tauri, and the local Vite development origin. No admin credentials are committed.
 
 管理员账号使用 `admin_account` 表（Flyway V2）。首次启动可通过 `APP_ADMIN_USERNAME` 和 `APP_ADMIN_PASSWORD` 创建账号；已有同名账号不会被重置。不要在仓库中保存管理员密码。管理 API 需要 ADMIN 令牌，普通用户令牌不可访问；管理员退出会撤销服务端会话。
 
@@ -41,4 +41,4 @@ See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret 
 
 桌面端账号管理使用 `/api/v1/me/gold-accounts`（GET、POST），以及 `/{id}`（GET、PATCH、DELETE）；验证码操作使用 `/{id}/send-sms` 和 `/{id}/login`。这些接口需要本产品的 USER Bearer token，且只能访问当前用户自己的记录。列表和详情不返回 Gold 密码或 token。账号密码按此任务要求明文保存在数据库，请限制数据库访问和备份权限。
 
-外部 Gold 服务地址通过 `APP_GOLD_ACCOUNT_BASE_URL` 配置，默认复用 `APP_PRICE_SERVER_BASE_URL`。服务端调用 `/api/User/SendSms` 与 `/api/User/LoginByPhoneAndCode`，当前适配器要求返回 `status: true`，登录响应还需包含 `data.token`。缺少 token 时账号不会变为在线。正式接入前需用服务提供方的响应样例核对该契约。
+外部 Gold 服务地址通过 `APP_PRICE_SERVER_BASE_URL` 配置。服务端调用 `/api/User/SendSms` 与 `/api/User/LoginByPhoneAndCode`，当前适配器要求返回 `status: true`，登录响应还需包含 `data.token`。缺少 token 时账号不会变为在线。正式接入前需用服务提供方的响应样例核对该契约。

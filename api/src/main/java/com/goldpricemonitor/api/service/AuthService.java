@@ -21,12 +21,12 @@ import static com.goldpricemonitor.api.service.ApiSupport.error;
 @Service public class AuthService {
     public record Principal(int id,String role,String sessionId,Instant expiresAt) {}
     private final UserMapper users; private final UserConfigMapper configs; private final AdminAccountMapper admins; private final AuthSessionMapper sessions; private final ObjectMapper json;
-    private final BCryptPasswordEncoder passwords=new BCryptPasswordEncoder(); private final byte[] secret; private final int interval; private final String publicBaseUrl;
+    private final BCryptPasswordEncoder passwords=new BCryptPasswordEncoder(); private final byte[] secret; private final int interval;
     public AuthService(UserMapper users,UserConfigMapper configs,AdminAccountMapper admins,AuthSessionMapper sessions,ObjectMapper json,
-        @Value("${app.jwt-secret:}") String secret,@Value("${app.monitor-interval-seconds:60}") int interval,@Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
+        @Value("${app.jwt-secret:}") String secret,@Value("${app.monitor-interval-seconds:60}") int interval,
         @Value("${app.admin-username:}") String adminUsername,@Value("${app.admin-password:}") String adminPassword) {
         if(secret.length()<32)throw new IllegalStateException("APP_JWT_SECRET must contain at least 32 characters");
-        this.users=users;this.configs=configs;this.admins=admins;this.sessions=sessions;this.json=json;this.secret=secret.getBytes(StandardCharsets.UTF_8);this.interval=interval;this.publicBaseUrl=publicBaseUrl.replaceAll("/$","");
+        this.users=users;this.configs=configs;this.admins=admins;this.sessions=sessions;this.json=json;this.secret=secret.getBytes(StandardCharsets.UTF_8);this.interval=interval;
         if(!adminUsername.isBlank()&&!adminPassword.isBlank()&&admins.byUsername(adminUsername)==null){AdminAccount admin=new AdminAccount();admin.setUsername(adminUsername);admin.setPasswordHash(passwords.encode(adminPassword));admins.insert(admin);}
     }
     public String phone(String value) {

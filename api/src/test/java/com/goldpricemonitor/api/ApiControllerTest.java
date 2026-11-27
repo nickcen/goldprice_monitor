@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 class ApiControllerTest {
     final UserMapper users=mock(UserMapper.class);final UserConfigMapper configs=mock(UserConfigMapper.class);final AdminAccountMapper admins=mock(AdminAccountMapper.class);final AuthSessionMapper sessions=mock(AuthSessionMapper.class);final PaymentMapper payments=mock(PaymentMapper.class);final SkuMapper skus=mock(SkuMapper.class);
-    final AuthService auth=new AuthService(users,configs,admins,sessions,new ObjectMapper(),"test-only-secret-12345678901234567890",60,"http://localhost:8080","","");
+    final AuthService auth=new AuthService(users,configs,admins,sessions,new ObjectMapper(),"test-only-secret-12345678901234567890",60,"","");
     final UserConfigService configService=new UserConfigService(configs,"gram","CNY");final UserService userService=new UserService(users,auth);final SkuService skuService=new SkuService(skus,payments);
     private static User user(int id,String phone,String hash){User u=new User();u.setId(id);u.setPhone(phone);u.setPasswordHash(hash);u.setStatus(1);return u;}
     private static AdminAccount admin(int id,String hash){AdminAccount a=new AdminAccount();a.setId(id);a.setPasswordHash(hash);a.setStatus(1);return a;}
@@ -72,7 +72,7 @@ class ApiControllerTest {
         when(skus.insert(any(Sku.class))).thenAnswer(call->{Sku row=call.getArgument(0);row.setId(9);return 1;});when(skus.byId(9)).thenReturn(sku(9));assertEquals(9,skuService.create(new SkuService.Input("gold",100,1,0)).get("id"));
     }
     @Test void coinApiPriceUsesFetchTimeAndRejectsFailedResponse() throws Exception {
-        var controller=new ApiController(mock(JdbcTemplate.class),new ObjectMapper(),"test-only-secret-12345678901234567890","","CNY","gram",60,"http://localhost:8080","","");
+        var controller=new ApiController(mock(JdbcTemplate.class),new ObjectMapper(),"test-only-secret-12345678901234567890","","CNY","gram",60,"","");
         var mapper=new ObjectMapper();
         Map<?,?> result=ReflectionTestUtils.invokeMethod(controller,"priceResponse",mapper.readTree("{\"status\":true,\"code\":1,\"data\":772.28}"));
         assertEquals("772.28",result.get("price"));

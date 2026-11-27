@@ -30,7 +30,7 @@ public class ApiController {
     private final ObjectMapper json;
     private final BCryptPasswordEncoder passwords = new BCryptPasswordEncoder();
     private final byte[] secret;
-    private final String priceSource, currency, unit, publicBaseUrl;
+    private final String priceSource, currency, unit;
     private final int interval;
     private final RestClient http = RestClient.builder().requestFactory(requestFactory()).build();
     private static SimpleClientHttpRequestFactory requestFactory() { var f=new SimpleClientHttpRequestFactory(); f.setConnectTimeout(Duration.ofSeconds(3)); f.setReadTimeout(Duration.ofSeconds(5)); return f; }
@@ -41,13 +41,12 @@ public class ApiController {
         @Value("${app.currency:CNY}") String currency,
         @Value("${app.unit:gram}") String unit,
         @Value("${app.monitor-interval-seconds:60}") int interval,
-        @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
         @Value("${app.admin-username:}") String adminUsername,
         @Value("${app.admin-password:}") String adminPassword) {
         if (secret.length() < 32) throw new IllegalStateException("APP_JWT_SECRET must contain at least 32 characters");
         this.db=db; this.json=json; this.secret=secret.getBytes(StandardCharsets.UTF_8);
         this.priceSource=priceSource; this.currency=currency; this.unit=unit;
-        this.interval=interval; this.publicBaseUrl=publicBaseUrl.replaceAll("/$", "");
+        this.interval=interval;
         if (!adminUsername.isBlank() && !adminPassword.isBlank()) {
             Integer count=db.queryForObject("SELECT count(*) FROM admin_account WHERE username=?", Integer.class, adminUsername);
             if (count==0) db.update("INSERT INTO admin_account(username,password_hash) VALUES (?,?)", adminUsername,passwords.encode(adminPassword));

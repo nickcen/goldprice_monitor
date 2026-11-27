@@ -21,7 +21,7 @@ public class GoldAccountService {
     private final RestClient http;
     private final String baseUrl;
 
-    public GoldAccountService(JdbcTemplate db, @Value("${app.gold-account-base-url:}") String baseUrl) {
+    public GoldAccountService(JdbcTemplate db, @Value("${app.price-server-base-url:}") String baseUrl) {
         this.db = db;
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         var factory = new SimpleClientHttpRequestFactory();

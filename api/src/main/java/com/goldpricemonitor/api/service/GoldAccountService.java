@@ -93,7 +93,8 @@ public class GoldAccountService {
         if (!Set.of("http", "https").contains(uri.getScheme()))
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址无效");
         try {
-            JsonNode result = http.post().uri(uri).body(payload).retrieve().body(JsonNode.class);
+            JsonNode result = payload == null ? http.get().uri(uri).retrieve().body(JsonNode.class)
+                : http.post().uri(uri).body(payload).retrieve().body(JsonNode.class);
             if (result == null || !result.isObject())
                 throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务返回无效响应");
             if (!result.path("status").asBoolean()) {
@@ -103,6 +104,34 @@ public class GoldAccountService {
             return result;
         } catch (com.goldpricemonitor.api.ApiFault e) { throw e; }
         catch (RestClientException e) { throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败"); }
+    }
+
+    public Map<String,Object> passwordCode(int userId, int id) {
+        get(userId, id);
+        JsonNode data = call("/api/User/GetPwdLoginCode", null).path("data");
+        String image = data.path("base64str").asText("");
+        String key = data.path("cachkey").asText("");
+        if (image.isBlank() || key.isBlank())
+            throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回图形验证码");
+        return Map.of("base64str", image, "cachkey", key);
+    }
+
+    @Transactional
+    public Map<String,Object> passwordLogin(int userId, int id, String code, String cachkey) {
+        get(userId, id);
+        if (code == null || code.isBlank() || cachkey == null || cachkey.isBlank())
+            throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "图形验证码不能为空");
+        Map<String,Object> account = db.queryForMap("SELECT username,password FROM gold_account WHERE user_id=? AND id=?", userId, id);
+        String password = (String) account.get("password");
+        if (password == null || password.isBlank())
+            throw error(HttpStatus.BAD_REQUEST, "GOLD_PASSWORD_MISSING", "请先为Gold账号设置密码");
+        JsonNode result = call("/api/User/GetLoginByUserName", Map.of(
+            "userName", account.get("username"), "password", password, "code", code.trim(), "cachkey", cachkey.trim()));
+        JsonNode token = result.path("data").path("token");
+        if (!token.isTextual() || token.asText().isBlank())
+            throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回token");
+        db.update("UPDATE gold_account SET token=?,is_online=1 WHERE user_id=? AND id=?", token.asText(), userId, id);
+        return get(userId, id);
     }
 
     public Map<String,Object> sendSms(int userId, int id, String mobile) {

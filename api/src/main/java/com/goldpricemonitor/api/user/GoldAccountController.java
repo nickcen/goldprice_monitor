@@ -15,6 +15,7 @@ public class GoldAccountController {
     public GoldAccountController(AuthService auth, GoldAccountService accounts) { this.auth=auth; this.accounts=accounts; }
     public record AccountInput(String username,String password) {}
     public record LoginInput(String mobile,String code) {}
+    public record PasswordLoginInput(String code,String cachkey) {}
     @GetMapping public List<Map<String,Object>> list(HttpServletRequest request) { return accounts.list(auth.user(request).id()); }
     @GetMapping("/{id}") public Map<String,Object> get(HttpServletRequest request,@PathVariable int id) { return accounts.get(auth.user(request).id(),id); }
     @PostMapping public Map<String,Object> create(HttpServletRequest request,@RequestBody AccountInput body) { return accounts.create(auth.user(request).id(),body.username(),body.password()); }
@@ -24,4 +25,6 @@ public class GoldAccountController {
     @DeleteMapping("/{id}") public Map<String,Object> delete(HttpServletRequest request,@PathVariable int id) { accounts.delete(auth.user(request).id(),id); return Map.of("success",true); }
     @PostMapping("/{id}/send-sms") public Map<String,Object> sendSms(HttpServletRequest request,@PathVariable int id,@RequestBody LoginInput body) { return accounts.sendSms(auth.user(request).id(),id,body.mobile()); }
     @PostMapping("/{id}/login") public Map<String,Object> login(HttpServletRequest request,@PathVariable int id,@RequestBody LoginInput body) { return accounts.login(auth.user(request).id(),id,body.mobile(),body.code()); }
+    @GetMapping("/{id}/password-code") public Map<String,Object> passwordCode(HttpServletRequest request,@PathVariable int id) { return accounts.passwordCode(auth.user(request).id(),id); }
+    @PostMapping("/{id}/password-login") public Map<String,Object> passwordLogin(HttpServletRequest request,@PathVariable int id,@RequestBody PasswordLoginInput body) { return accounts.passwordLogin(auth.user(request).id(),id,body.code(),body.cachkey()); }
 }

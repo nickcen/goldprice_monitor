@@ -17,21 +17,14 @@ export class Monitor {
   private timer?: number;
   private running = false;
   private generation = 0;
-  private lastZone: 'low' | 'high' | 'normal' = 'normal';
-  private thresholds = '';
   private lastPrice?: GoldPrice;
   constructor(private fetchPrice: () => Promise<GoldPrice>, private onState: (price: GoldPrice | undefined, error: string | null) => void, private onAlert: (price: GoldPrice, threshold: string | number, direction: 'low' | 'high') => void, private onSuccess?: (price: GoldPrice) => void) {}
   start(config: Config): void {
     if (!Number.isSafeInteger(config.monitorIntervalSeconds) || config.monitorIntervalSeconds <= 0) {
       throw new Error('监控频次必须为正整数秒');
     }
-    const thresholds = `${config.minPrice ?? ''}|${config.maxPrice ?? ''}`;
-    const previousZone = this.lastZone;
     const previousPrice = this.lastPrice;
-    const sameThresholds = thresholds === this.thresholds;
     this.stop();
-    this.thresholds = thresholds;
-    if (sameThresholds && previousPrice && previousPrice.unit === config.unit && previousPrice.currency === config.currency && previousPrice.precision === config.precision) this.lastZone = previousZone;
     if (previousPrice && previousPrice.unit === config.unit && previousPrice.currency === config.currency && previousPrice.precision === config.precision) this.lastPrice = previousPrice;
     const generation = this.generation;
     const interval = config.monitorIntervalSeconds * 1000;
@@ -47,8 +40,7 @@ export class Monitor {
         this.onState(price, null);
         this.onSuccess?.(price);
         const zone = config.minPrice != null && compareDecimal(price.price, config.minPrice) < 0 ? 'low' : config.maxPrice != null && compareDecimal(price.price, config.maxPrice) > 0 ? 'high' : 'normal';
-        if (zone !== this.lastZone && zone !== 'normal') this.onAlert(price, zone === 'low' ? config.minPrice! : config.maxPrice!, zone);
-        this.lastZone = zone;
+        if (zone !== 'normal') this.onAlert(price, zone === 'low' ? config.minPrice! : config.maxPrice!, zone);
       } catch (error) {
         if (generation === this.generation) this.onState(this.lastPrice, error instanceof Error ? error.message : '获取金价失败');
       } finally {
@@ -58,5 +50,5 @@ export class Monitor {
     };
     void poll();
   }
-  stop(): void { this.generation++; if (this.timer !== undefined) clearTimeout(this.timer); this.timer = undefined; this.lastZone = 'normal'; this.lastPrice = undefined; }
+  stop(): void { this.generation++; if (this.timer !== undefined) clearTimeout(this.timer); this.timer = undefined; this.lastPrice = undefined; }
 }

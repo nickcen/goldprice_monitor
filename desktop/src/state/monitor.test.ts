@@ -11,7 +11,7 @@ describe('monitor', () => {
     expect(compareDecimal('100.0000', '100')).toBe(0);
     expect(compareDecimal('9007199254740993.0001', '9007199254740993.0000')).toBe(1);
   });
-  it('alerts once per crossing and retries after a failure', async () => {
+  it('alerts on every out-of-range poll and retries after a failure', async () => {
     vi.useFakeTimers();
     const alerts: string[] = [];
     const states: Array<string | undefined> = [];
@@ -23,7 +23,7 @@ describe('monitor', () => {
     }, (price) => states.push(String(price?.price)), (_, __, zone) => alerts.push(zone));
     monitor.start(config); await flush();
     for (let i = 0; i < 4; i++) { await vi.advanceTimersByTimeAsync(1000); await flush(); }
-    expect(alerts).toEqual(['low', 'low']);
+    expect(alerts).toEqual(['low', 'low', 'low']);
     expect(states[1]).toBe('99');
     monitor.stop(); vi.useRealTimers();
   });
@@ -34,12 +34,12 @@ describe('monitor', () => {
     const monitor = new Monitor(async () => quote(prices.shift()!), () => {}, (_, __, zone) => alerts.push(zone));
     monitor.start(config);
     await vi.advanceTimersByTimeAsync(6000);
-    expect(alerts).toEqual(['high', 'high', 'low']);
+    expect(alerts).toEqual(['high', 'high', 'high', 'low']);
     monitor.stop();
     const withoutHigh = new Monitor(async () => quote('201'), () => {}, (_, __, zone) => alerts.push(zone));
     withoutHigh.start({ ...config, maxPrice: null });
     await flush();
-    expect(alerts).toEqual(['high', 'high', 'low']);
+    expect(alerts).toEqual(['high', 'high', 'high', 'low']);
     withoutHigh.stop();
     vi.useRealTimers();
   });

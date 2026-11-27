@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Build locally and publish the admin SPA and Java API to the Chidugaiyi host.
-# First create /etc/goldprice-monitor.env on the server (see api/.env.example).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +23,7 @@ SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o C
 remote() { "${SSH[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "$@"; }
 
 if [[ "$ACTION" == status ]]; then
-  remote "systemctl status $SERVICE --no-pager; curl -fsS http://127.0.0.1:$PORT/actuator/health; nginx -t"
+  remote "systemctl status $SERVICE --no-pager && curl -fsS http://127.0.0.1:$PORT/actuator/health && nginx -t"
   exit
 fi
 
@@ -42,7 +41,6 @@ JAR="$(find "$ROOT/api/target" -maxdepth 1 -name '*.jar' ! -name '*.original' -p
 remote 'bash -s' <<'REMOTE_CHECK'
 set -euo pipefail
 test "$(id -u)" -eq 0 || { echo 'Deploy requires root remote user' >&2; exit 1; }
-test -s /etc/goldprice-monitor.env || { echo 'Create /etc/goldprice-monitor.env with DB_URL, DB_USER, DB_PASSWORD and APP_JWT_SECRET' >&2; exit 1; }
 test -s /etc/nginx/ssl/chidugaiyi.com.cer
 test -s /etc/nginx/ssl/chidugaiyi.com.key
 openssl x509 -in /etc/nginx/ssl/chidugaiyi.com.cer -noout -checkend 604800 >/dev/null
@@ -62,7 +60,6 @@ rsync -az "$ROOT/deploy/goldprice-monitor.conf" -e "$RSYNC_SSH" "${REMOTE_USER}@
 remote 'bash -s' <<'REMOTE_FINISH'
 set -euo pipefail
 mv /opt/goldprice-monitor/api.jar.new /opt/goldprice-monitor/api.jar
-chmod 600 /etc/goldprice-monitor.env
 systemctl daemon-reload
 nginx -t
 systemctl enable --now goldprice-monitor

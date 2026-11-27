@@ -6,5 +6,5 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
 app:
   jwt-secret: DnNd7lPLUI6kgBaBWqZFeTHcBHmvtVzL
-  public-base-url: ${APP_PUBLIC_BASE_URL:https://coinapi.gcsgcs.com}
+  public-base-url: https://gold.chidugaiyi.com
   price-server-base-url: ${APP_PRICE_SERVER_BASE_URL:https://testcoinapi.gcsgcs.com/api/}

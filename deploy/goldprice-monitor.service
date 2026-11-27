@@ -5,11 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/goldprice-monitor.env
 Environment=SPRING_PROFILES_ACTIVE=prod
 Environment=SERVER_ADDRESS=127.0.0.1
 Environment=SERVER_PORT=18080
-Environment=APP_PUBLIC_BASE_URL=https://gold.chidugaiyi.com
 WorkingDirectory=/opt/goldprice-monitor
 ExecStart=/usr/bin/java -jar /opt/goldprice-monitor/api.jar
 Restart=on-failure

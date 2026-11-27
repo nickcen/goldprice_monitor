@@ -12,7 +12,7 @@ npm ci
 npm run tauri dev
 ```
 
-`pnpm tauri dev`（或 `npm run tauri dev`）读取 `.env.development`，连接本地 API `http://127.0.0.1:8080`；`pnpm tauri build`（或 `npm run tauri build`）读取 `.env.production`，将生产 API `https://gold.chidugaiyi.com` 写入安装包。`VITE_API_BASE_URL` 为 API 根地址，不能包含令牌。未配置时应用会显示配置提示，无法登录。桌面端从 API 获取用户配置后，使用用户令牌请求 `/api/v1/gold-price/at` 获取当前分钟金价。API 需允许桌面 WebView 来源的跨域请求以完成登录和配置操作。
+`pnpm tauri dev`（或 `npm run tauri dev`）读取 `.env.development`，连接本地 API `http://127.0.0.1:8080`；`pnpm tauri build`（或 `npm run tauri build`）读取 `.env.production`，将生产 API `https://gold.chidugaiyi.com` 写入安装包。`VITE_API_BASE_URL` 为 API 根地址，不能包含令牌。未配置时应用会显示配置提示，无法登录。桌面端从 API 获取用户配置后，使用用户令牌请求 `/api/v1/gold-price/latest` 获取当前金价。API 需允许桌面 WebView 来源的跨域请求以完成登录和配置操作。
 
 JWT 存入 macOS 钥匙串或 Windows 凭据库。登出及会话失效时清除。关闭主窗口后应用留在托盘中继续监控；点击托盘图标切换窗口。macOS 菜单栏显示价格文字，Windows 托盘悬停提示显示价格。通知需要系统权限。
 

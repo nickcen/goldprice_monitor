@@ -28,12 +28,13 @@ const props = defineProps<{ state: { page: 'restoring' | 'login' | 'register' | 
         <ElMenuItem
           v-for="item in [{ page: 'home', icon: '⌂', label: '首页' }, { page: 'gold', icon: '◆', label: 'Gold账号' }, { page: 'account', icon: '◉', label: '账户' }] as const"
           :key="item.page" :index="item.page" :aria-current="state.page === item.page ? 'page' : undefined">
-          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span><span class="nav-label">{{ item.label }}</span>
+          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span><span class="nav-label">{{ item.label
+            }}</span>
         </ElMenuItem>
       </ElMenu>
     </nav>
     <div class="content">
-      <header class="page-header">
+      <header v-if="state.page !== 'gold'" class="page-header">
         <div><span class="eyebrow">GOLDPRICE MONITOR</span>
           <h1>{{ state.page === 'home' ? '首页' : state.page === 'gold' ? 'Gold账号' : '账户' }}</h1>
         </div>
@@ -51,12 +52,57 @@ const props = defineProps<{ state: { page: 'restoring' | 'login' | 'register' | 
 </template>
 
 <style scoped>
-.sidebar-menu { width: 100%; border-right: 0; background: transparent; }
-.sidebar-menu .el-menu-item { height: 58px; margin-bottom: 12px; padding: 8px 4px !important; border-radius: 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; color: #364458; line-height: 1.2; }
-.sidebar-menu .el-menu-item:hover { background: #dce8f6; }
-.sidebar-menu .el-menu-item.is-active { background: #d5e3f5; color: #234f7c; }
-.sidebar-menu .el-menu-item:focus-visible { outline: 3px solid #e9a74f; outline-offset: 2px; }
-.nav-icon { font-size: 22px; line-height: 1; }
-.nav-label { font-size: 14px; font-weight: 600; white-space: nowrap; }
-@media (max-width: 700px) { .nav-icon { font-size: 20px; } .nav-label { font-size: 12px; } }
+.sidebar-menu {
+  width: 100%;
+  border-right: 0;
+  background: transparent;
+}
+
+.sidebar-menu .el-menu-item {
+  height: 58px;
+  margin-bottom: 12px;
+  padding: 8px 4px !important;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  color: #364458;
+  line-height: 1.2;
+}
+
+.sidebar-menu .el-menu-item:hover {
+  background: #dce8f6;
+}
+
+.sidebar-menu .el-menu-item.is-active {
+  background: #d5e3f5;
+  color: #234f7c;
+}
+
+.sidebar-menu .el-menu-item:focus-visible {
+  outline: 3px solid #e9a74f;
+  outline-offset: 2px;
+}
+
+.nav-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.nav-label {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .nav-icon {
+    font-size: 20px;
+  }
+
+  .nav-label {
+    font-size: 12px;
+  }
+}
 </style>

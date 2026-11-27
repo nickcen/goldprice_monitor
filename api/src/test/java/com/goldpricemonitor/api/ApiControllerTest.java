@@ -42,6 +42,19 @@ class ApiControllerTest {
         when(configs.byUser(1)).thenReturn(config());assertEquals("900719925474.0993",configService.get(1).get("minPrice"));
         assertEquals("INVALID_PARAMETER",assertThrows(ApiFault.class,()->configService.update(1,new ObjectMapper().readTree("{\"minPrice\":\"999999999999.0000\"}"))).code);
     }
+    @Test void configSaveReadsBackWrittenThresholds() throws Exception {
+        UserConfig row=config();
+        when(configs.byUser(1)).thenReturn(row);
+        when(configs.prices(eq(1),any(),any())).thenAnswer(call->{row.setMinPrice(call.getArgument(1));row.setMaxPrice(call.getArgument(2));return 1;});
+        var saved=configService.update(1,new ObjectMapper().readTree("{\"minPrice\":\"750.00\",\"maxPrice\":\"780.00\"}"));
+        assertEquals("750.00",saved.get("minPrice"));
+        assertEquals("780.00",configService.get(1).get("maxPrice"));
+        verify(configs).prices(1,new BigDecimal("750.00"),new BigDecimal("780.00"));
+    }
+    @Test void configSaveReportsMissingDatabaseRow() throws Exception {
+        when(configs.byUser(1)).thenReturn(config());
+        assertEquals("CONFIG_NOT_SAVED",assertThrows(ApiFault.class,()->configService.update(1,new ObjectMapper().readTree("{\"minPrice\":\"750.00\",\"maxPrice\":\"780.00\"}"))).code);
+    }
     @Test void listFiltersAndSkuConflictRemain() {
         when(users.list("138",1,10)).thenReturn(List.of());assertEquals(2,userService.list("138",1,2).get("page"));verify(users).list("138",1,10);
         when(skus.byId(5)).thenReturn(sku(5));when(payments.countBySku(5)).thenReturn(1);assertEquals(HttpStatus.CONFLICT,assertThrows(ApiFault.class,()->skuService.delete(5)).status);

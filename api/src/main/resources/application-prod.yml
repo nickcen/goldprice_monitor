@@ -6,4 +6,4 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
 app:
   jwt-secret: DnNd7lPLUI6kgBaBWqZFeTHcBHmvtVzL
-  price-server-base-url: ${APP_PRICE_SERVER_BASE_URL:https://coinapi.gcsgcs.com}
+  price-server-base-url: https://coinapi.gcsgcs.com

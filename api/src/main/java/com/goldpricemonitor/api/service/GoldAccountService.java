@@ -1,33 +1,37 @@
 package com.goldpricemonitor.api.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.*;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 import static com.goldpricemonitor.api.service.ApiSupport.error;
 
 @Service
 public class GoldAccountService {
     private final JdbcTemplate db;
-    private final RestClient http;
+    private final OkHttpClient http;
     private final String baseUrl;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public GoldAccountService(JdbcTemplate db, @Value("${app.price-server-base-url:}") String baseUrl) {
         this.db = db;
         this.baseUrl = baseUrl.replaceAll("/+$", "");
-        var factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(3));
-        factory.setReadTimeout(Duration.ofSeconds(8));
-        this.http = RestClient.builder().requestFactory(factory).build();
+        this.http = new OkHttpClient.Builder()
+            .connectTimeout(Duration.ofSeconds(3))
+            .readTimeout(Duration.ofSeconds(8))
+            .build();
     }
 
     private Map<String,Object> row(java.sql.ResultSet rs, int ignored) throws java.sql.SQLException {
@@ -93,8 +97,14 @@ public class GoldAccountService {
         if (!Set.of("http", "https").contains(uri.getScheme()))
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址无效");
         try {
-            JsonNode result = payload == null ? http.get().uri(uri).retrieve().body(JsonNode.class)
-                : http.post().uri(uri).body(payload).retrieve().body(JsonNode.class);
+            Request.Builder request = new Request.Builder().url(uri.toString());
+            if (payload == null) request.get();
+            else request.post(RequestBody.create(mapper.writeValueAsBytes(payload), okhttp3.MediaType.get("application/json; charset=utf-8")));
+            JsonNode result;
+            try (Response response = http.newCall(request.build()).execute()) {
+                if (!response.isSuccessful()) throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败");
+                result = response.body() == null ? null : mapper.readTree(response.body().byteStream());
+            }
             if (result == null || !result.isObject())
                 throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务返回无效响应");
             if (!result.path("status").asBoolean()) {
@@ -103,7 +113,7 @@ public class GoldAccountService {
             }
             return result;
         } catch (com.goldpricemonitor.api.ApiFault e) { throw e; }
-        catch (RestClientException e) { throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败"); }
+        catch (IOException e) { throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败"); }
     }
 
     public Map<String,Object> passwordCode(int userId, int id) {

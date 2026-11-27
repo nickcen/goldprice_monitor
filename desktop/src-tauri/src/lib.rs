@@ -1,4 +1,4 @@
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -148,6 +148,16 @@ pub fn run() {
                 _ => {}
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running desktop application");
+        .build(tauri::generate_context!())
+        .expect("error while building desktop application")
+        .run(|app, event| {
+            if let RunEvent::Reopen { has_visible_windows, .. } = event {
+                if !has_visible_windows {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        });
 }

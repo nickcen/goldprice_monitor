@@ -1,16 +1,18 @@
 import './style.css';
+import { showAlert } from './ui';
+import { createApp, h, reactive } from 'vue';
+import 'element-plus/dist/index.css';
+import App from './App.vue';
 import { ApiError, configuredApiClient } from './api/client';
 import type { Config, GoldPrice } from './api/contracts';
 import { fetchGoldPrice } from './api/goldPrice';
 import { Session } from './state/session';
 import { Monitor, compareDecimal } from './state/monitor';
 import { notify, trayStatus } from './platform/desktop';
-import { GoldAccountsPage } from './goldAccounts';
-import { chartSvg, loadPoints, localDay, localMinute, prunePoints, saveServerPoints, type PricePoint, type ServerPoint } from './history';
+import { loadPoints, localDay, localMinute, prunePoints, saveServerPoints, type PricePoint, type ServerPoint } from './history';
 
-const app = document.querySelector<HTMLDivElement>('#app');
-if (!app) throw new Error('Missing app element');
-const root = app;
+const root = document.querySelector<HTMLDivElement>('#app');
+if (!root) throw new Error('Missing app element');
 let api: ReturnType<typeof configuredApiClient> | null = null;
 let setupError = '';
 try { api = configuredApiClient(); }
@@ -25,7 +27,6 @@ let historyError = '';
 let historyDay = localDay();
 let configError: string | null = null;
 let message = '';
-let alertTimer: number | undefined;
 let savingConfig = false;
 let configDraft: { min: string; max: string } | null = null;
 let page: 'restoring' | 'login' | 'register' | 'home' | 'account' | 'gold' = setupError ? 'login' : 'restoring';
@@ -44,18 +45,7 @@ const monitor = new Monitor(
   },
 );
 function showPriceAlert(body: string): void {
-  if (document.hidden) return;
-  let alert = document.querySelector<HTMLDivElement>('#price-alert');
-  if (!alert) {
-    alert = document.createElement('div');
-    alert.id = 'price-alert';
-    alert.className = 'price-alert';
-    alert.setAttribute('role', 'alert');
-    document.body.append(alert);
-  }
-  alert.textContent = `金价监控提醒：${body}`;
-  if (alertTimer !== undefined) clearTimeout(alertTimer);
-  alertTimer = globalThis.setTimeout(() => { alert?.remove(); alertTimer = undefined; }, 10000);
+  if (!document.hidden) showAlert(`金价监控提醒：${body}`);
 }
 async function updateTray(nextPrice: GoldPrice | undefined, error: string | null): Promise<void> {
   const update = ++trayUpdate;
@@ -103,51 +93,30 @@ async function authorized<T>(path: string, options: { method?: string; body?: un
   try { return await request<T>(path, { ...options, token: session.token ?? undefined }); }
   catch (error) { if (error instanceof ApiError && error.status === 401) void session.expire(); throw error; }
 }
-function escape(value: unknown): string { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!); }
 function formatPrice(value: string | number): string { return Number(value).toFixed(2); }
-function formatDataTime(value: string): string {
-  const date = new Date(value);
-  const pad = (part: number) => String(part).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
 function errorText(error: unknown): string { return error instanceof ApiError && error.response && typeof error.response === 'object' && 'message' in error.response ? String(error.response.message) : error instanceof Error ? error.message : '操作失败'; }
-function render(): void {
-  if (setupError) { root.innerHTML = `<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>需要配置 API</h1><p role="alert">${escape(setupError)}</p></main>`; return; }
-  if (page === 'restoring') { root.innerHTML = '<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>正在恢复登录…</h1></main>'; return; }
-  if (page === 'login' || page === 'register') {
-    root.innerHTML = `<main class="auth"><span class="eyebrow">GOLDPRICE MONITOR</span><h1>${page === 'login' ? '登录' : '注册'}</h1><p>实时关注金价变化</p><form id="auth-form"><label>手机号<input name="phone" type="tel" required autocomplete="tel" placeholder="13800138000"></label><label>密码<input name="password" type="password" required minlength="8" autocomplete="${page === 'login' ? 'current-password' : 'new-password'}"></label>${page === 'register' ? '<label>确认密码<input name="confirm" type="password" required minlength="8" autocomplete="new-password"></label>' : ''}<button type="submit">${page === 'login' ? '登录' : '注册'}</button></form><button class="link" id="switch">${page === 'login' ? '没有账号？注册' : '已有账号？登录'}</button><div class="message" role="status">${escape(message)}</div></main>`;
-    root.querySelector('#switch')?.addEventListener('click', () => { page = page === 'login' ? 'register' : 'login'; message = ''; render(); });
-    root.querySelector<HTMLFormElement>('#auth-form')?.addEventListener('submit', event => void submitAuth(event));
-    return;
-  }
-  const home = page === 'home';
-  const gold = page === 'gold';
-  root.innerHTML = `<main class="app-shell"><nav class="sidebar" aria-label="主导航"><div class="brand-mark" aria-hidden="true">◆</div><button class="nav-item ${home ? 'active' : ''}" id="nav-home" aria-current="${home ? 'page' : 'false'}"><span aria-hidden="true">⌂</span>首页</button><button class="nav-item ${page === 'account' ? 'active' : ''}" id="nav-account" aria-current="${page === 'account' ? 'page' : 'false'}"><span aria-hidden="true">◉</span>账户</button><button class="nav-item ${gold ? 'active' : ''}" id="nav-gold" aria-current="${gold ? 'page' : 'false'}"><span aria-hidden="true">◆</span>Gold账号</button></nav><div class="content"><header class="page-header"><div><span class="eyebrow">GOLDPRICE MONITOR</span><h1>${home ? '首页' : gold ? 'Gold账号' : '账户'}</h1></div><button class="secondary" id="logout">登出</button></header>${gold ? '<div id="gold-content"></div>' : home ? `<section class="price-card"><span>当前金价</span><strong>${price ? escape(formatPrice(price.price)) : '—'}</strong><small>${config ? `${escape(config.currency)} / ${escape(config.unit)}` : '获取中'}</small><p>${price ? `数据时间 ${escape(formatDataTime(price.dataTime))}` : '等待首个价格'}</p><p class="${priceError ? 'error' : ''}">${escape(priceError ? (price ? `${priceError}（显示上次成功价格，非最新）` : priceError) : (price ? '监控中' : '获取中'))}</p>${message ? `<p class="error" role="alert">${escape(message)}</p>` : ''}</section><section class="chart-card"><h2>今日金价走势</h2><p>${escape(config ? `${config.currency} / ${config.unit}` : '获取中')} · ${escape(localDay())}</p>${historyError ? `<p class="error" role="alert">历史记录：${escape(historyError)}</p>` : chartSvg(historyDay === localDay() ? points : [])}</section>` : `<section class="settings"><div class="section-heading"><div><span class="eyebrow">ACCOUNT SETTINGS</span><h2>监控配置</h2></div><button class="secondary" id="refresh-config" type="button" ${savingConfig ? 'disabled' : ''}>重新获取用户配置</button></div>${config ? `<div class="config-grid"><div><span>用户等级</span><strong>${escape(config.level)}</strong></div><div><span>监控频率</span><strong>每 ${escape(config.monitorIntervalSeconds)} 秒</strong></div></div><form id="config-form"><label>低价提醒<input name="min" inputmode="decimal" placeholder="不设置" value="${escape(configDraft?.min ?? (config.minPrice == null ? '' : formatPrice(config.minPrice)))}"></label><label>高价提醒<input name="max" inputmode="decimal" placeholder="不设置" value="${escape(configDraft?.max ?? (config.maxPrice == null ? '' : formatPrice(config.maxPrice)))}"></label><button type="submit" ${savingConfig ? 'disabled' : ''}>${savingConfig ? '保存中…' : '保存阈值'}</button></form>${configError ? `<p class="error" role="alert">配置刷新失败：${escape(configError)}</p><button id="retry">重试</button>` : ''}` : `<p class="error">${escape(configError ?? '正在获取配置')}</p><button id="retry">重试</button>`}<div class="message" role="status">${escape(message)}</div></section>`}</div></main>`;
-  if (gold) { const content = root.querySelector<HTMLElement>('#gold-content'); if (content) void new GoldAccountsPage(content, (path, options) => authorized(path, options)).load(); }
-  root.querySelector('#nav-gold')?.addEventListener('click', () => { if (page !== 'gold') { page = 'gold'; render(); } });
-  root.querySelector('#nav-home')?.addEventListener('click', () => { if (page !== 'home') { page = 'home'; render(); } });
-  root.querySelector('#nav-account')?.addEventListener('click', () => { if (page !== 'account') { page = 'account'; render(); } });
-  root.querySelector('#logout')?.addEventListener('click', () => void session.logout());
-  root.querySelector('#retry')?.addEventListener('click', () => void loadConfig());
-  root.querySelector<HTMLButtonElement>('#refresh-config')?.addEventListener('click', event => {
-    const button = event.currentTarget as HTMLButtonElement;
-    button.disabled = true;
-    button.textContent = '获取中…';
-    configDraft = null;
-    void loadConfig().then(() => { message = configError ? '重新获取用户配置失败' : '已获取最新用户配置'; render(); });
-  });
-  const configForm = root.querySelector<HTMLFormElement>('#config-form');
-  configForm?.addEventListener('input', () => { const data = new FormData(configForm); configDraft = { min: String(data.get('min') ?? ''), max: String(data.get('max') ?? '') }; });
-  configForm?.addEventListener('submit', event => void saveConfig(event));
-}
-async function submitAuth(event: Event): Promise<void> {
-  event.preventDefault();
-  const form = event.currentTarget as HTMLFormElement;
-  const data = new FormData(form);
-  const phone = String(data.get('phone') ?? '').trim(); const password = String(data.get('password') ?? '');
+const view = reactive({ page, setupError, config, configError, price, priceError, message, points, historyDay, historyError, savingConfig, configDraft });
+function render(): void { Object.assign(view, { page, config, configError, price, priceError, message, points, historyDay, historyError, savingConfig, configDraft }); }
+function switchAuth(): void { page = page === 'login' ? 'register' : 'login'; message = ''; render(); }
+function navigate(next: 'home' | 'account' | 'gold'): void { page = next; render(); }
+function refreshConfig(): void { configDraft = null; void loadConfig().then(() => { message = configError ? '重新获取用户配置失败' : '已获取最新用户配置'; render(); }); }
+const actions = {
+  switchAuth,
+  submitAuth: (phone: string, password: string, confirm: string) => void submitAuth(phone, password, confirm),
+  navigate,
+  logout: () => void session.logout(),
+  retry: () => void loadConfig(),
+  refresh: refreshConfig,
+  save: (min: string, max: string) => void saveConfig(min, max),
+  draft: (min: string, max: string) => { configDraft = { min, max }; },
+  request: <T>(path: string, options: { method?: string; body?: unknown } = {}) => authorized<T>(path, options),
+};
+createApp({ render: () => h(App, { state: view, actions }) }).mount(root);
+async function submitAuth(rawPhone: string, password: string, confirm: string): Promise<void> {
+  const phone = rawPhone.trim();
   if (!/^(?:1[3-9]\d{9}|\+[1-9]\d{7,14})$/.test(phone)) { message = '手机号格式无效'; render(); return; }
   if (password.length < 8 || password.length > 72) { message = '密码长度应为 8 到 72 位'; render(); return; }
-  if (page === 'register' && password !== data.get('confirm')) { message = '两次密码不一致'; render(); return; }
+  if (page === 'register' && password !== confirm) { message = '两次密码不一致'; render(); return; }
   try {
     if (page === 'register') { await request('/api/v1/auth/register', { method: 'POST', body: { phone, password } }); page = 'login'; message = '注册成功，请登录'; }
     else { await session.login(phone, password); page = 'home'; message = ''; await loadConfig(); }
@@ -171,11 +140,9 @@ async function loadConfig(updateAccountView = true): Promise<void> {
   // the form then discards the pending submit event and the user's input.
   if (updateAccountView || (page !== 'account' && page !== 'gold')) render();
 }
-async function saveConfig(event: Event): Promise<void> {
-  event.preventDefault();
+async function saveConfig(rawMin: string, rawMax: string): Promise<void> {
   if (!config || savingConfig) return;
-  const data = new FormData(event.currentTarget as HTMLFormElement);
-  const min = String(data.get('min') ?? '').trim(), max = String(data.get('max') ?? '').trim();
+  const min = rawMin.trim(), max = rawMax.trim();
   const valid = (value: string) => value === '' || (/^\d+(?:\.\d{1,2})?$/.test(value) && value.replace('.', '').length <= 18);
   if (!valid(min) || !valid(max) || (min && max && compareDecimal(min, max) >= 0)) { message = '价格须为非负、最多两位小数，且低价小于高价'; render(); return; }
   savingConfig = true;

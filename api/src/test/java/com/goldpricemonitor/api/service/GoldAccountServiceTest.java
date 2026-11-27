@@ -18,6 +18,7 @@ class GoldAccountServiceTest {
         JdbcTemplate db = new JdbcTemplate(source);
         db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),is_online TINYINT DEFAULT 0)");
         AtomicReference<String> request = new AtomicReference<>();
+        AtomicReference<String> requestContentLength = new AtomicReference<>();
         AtomicBoolean accepted = new AtomicBoolean(false);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/api/User/GetPwdLoginCode", exchange -> {
@@ -27,6 +28,7 @@ class GoldAccountServiceTest {
             exchange.getResponseBody().write(response); exchange.close();
         });
         server.createContext("/api/User/GetLoginByUserName", exchange -> {
+            requestContentLength.set(exchange.getRequestHeaders().getFirst("Content-Length"));
             request.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));
             byte[] response = (accepted.get() ? "{\"status\":true,\"data\":{\"token\":\"password-token\"}}" : "{\"status\":false,\"msg\":\"验证码错误\"}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type","application/json"); exchange.sendResponseHeaders(200,response.length);
@@ -43,6 +45,7 @@ class GoldAccountServiceTest {
             assertFalse((boolean)service.get(1,id).get("isOnline"));
             accepted.set(true);
             service.passwordLogin(1,id,"1234","key-1");
+            assertNotNull(requestContentLength.get(), "Gold login request must include Content-Length");
             assertTrue(request.get().contains("\"userName\":\"account\""));
             assertTrue(request.get().contains("\"password\":\"secret\""));
             assertTrue(request.get().contains("\"cachkey\":\"key-1\""));

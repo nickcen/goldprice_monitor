@@ -25,6 +25,7 @@ let historyError = '';
 let historyDay = localDay();
 let configError: string | null = null;
 let message = '';
+let alertTimer: number | undefined;
 let savingConfig = false;
 let configDraft: { min: string; max: string } | null = null;
 let page: 'restoring' | 'login' | 'register' | 'home' | 'account' | 'gold' = setupError ? 'login' : 'restoring';
@@ -36,8 +37,26 @@ const session = new Session(request, () => { configRequest++; trayUpdate++; moni
 const monitor = new Monitor(
   () => { if (!config) throw new Error('尚未获取监控配置'); return fetchGoldPrice(config, path => authorized<GoldPrice>(path)); },
   (nextPrice, error) => { price = nextPrice; priceError = error; void updateTray(nextPrice, error); if (page === 'home') render(); },
-  (nextPrice, threshold, direction) => { void notify('金价监控提醒', `当前金价 ${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}，${direction === 'low' ? '低于' : '高于'}阈值 ${formatPrice(threshold)}`).catch(() => { message = '系统通知不可用，请检查通知权限'; render(); }); },
+  (nextPrice, threshold, direction) => {
+    const body = `当前金价 ${nextPrice.price} ${nextPrice.currency}/${nextPrice.unit}，${direction === 'low' ? '低于' : '高于'}阈值 ${formatPrice(threshold)}`;
+    showPriceAlert(body);
+    void notify('金价监控提醒', body).catch(error => { message = `系统通知不可用：${errorText(error)}`; render(); });
+  },
 );
+function showPriceAlert(body: string): void {
+  if (document.hidden) return;
+  let alert = document.querySelector<HTMLDivElement>('#price-alert');
+  if (!alert) {
+    alert = document.createElement('div');
+    alert.id = 'price-alert';
+    alert.className = 'price-alert';
+    alert.setAttribute('role', 'alert');
+    document.body.append(alert);
+  }
+  alert.textContent = `金价监控提醒：${body}`;
+  if (alertTimer !== undefined) clearTimeout(alertTimer);
+  alertTimer = globalThis.setTimeout(() => { alert?.remove(); alertTimer = undefined; }, 10000);
+}
 async function updateTray(nextPrice: GoldPrice | undefined, error: string | null): Promise<void> {
   const update = ++trayUpdate;
   if (!nextPrice) { await trayStatus('获取中'); return; }

@@ -9,6 +9,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.sql.Timestamp;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.spec.X509EncodedKeySpec;
+import javax.crypto.Cipher;
 import java.util.*;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -26,6 +30,7 @@ import static com.goldpricemonitor.api.service.ApiSupport.error;
 
 @Service
 public class GoldAccountService {
+    private static final String GOLD_PUBLIC_KEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzZmfknFqDMn21XfaMyCGyNfn5smYPrlpM7i295QSMY2d0mEmzVFFYaaV5dRpNX9Qa/63iB+t+q/Ak1nPyj33y15h03WyNBSkBFKl/jPvAG/tsOMgJfc2HX/xVdrtPbryaY/XP5DKCsAfm8zHm3SBAgN38TKeF4jUmXXIkcMwUDToK79J1ry0WsC/6pEmrT6Di5niYZ24BH1lR6OLon4AuFOQ/pMeu6Wx2QuJjBSN3kg1bJPFQopLVbeIGdzJ1CIk9SbMF4yz+iRbqUBIBwBL5Yr94UJWP1zkjfu6WQgw23o1hiNNVSLD6yre6bEt33ANdOL624uQdhVK1jnjllYzLQIDAQAB";
     private static final Logger log = LoggerFactory.getLogger(GoldAccountService.class);
     private static final ZoneId GOLD_ZONE = ZoneId.of("Asia/Shanghai");
     private final JdbcTemplate db;
@@ -121,11 +126,15 @@ public class GoldAccountService {
     }
 
     private JsonNode call(String path, Map<String,Object> payload, String token) {
+        return call(path, payload, token, payload != null);
+    }
+
+    private JsonNode call(String path, Map<String,Object> payload, String token, boolean post) {
         if (baseUrl.isBlank()) throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址未配置");
         URI uri = URI.create(baseUrl + path);
         if (!Set.of("http", "https").contains(uri.getScheme()))
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址无效");
-        String method = payload == null ? "GET" : "POST";
+        String method = post ? "POST" : "GET";
         String endpoint = uri.getPath();
         String requestId = UUID.randomUUID().toString();
         long started = System.nanoTime();
@@ -133,7 +142,8 @@ public class GoldAccountService {
         try {
             Request.Builder request = new Request.Builder().url(uri.toString());
             if (token != null) request.header("Authorization", "Bearer " + token);
-            if (payload == null) request.get();
+            if (!post) request.get();
+            else if (payload == null) request.post(RequestBody.create(new byte[0], null));
             else request.post(RequestBody.create(mapper.writeValueAsBytes(payload), okhttp3.MediaType.get("application/json; charset=utf-8")));
             JsonNode result;
             try (Response response = http.newCall(request.build()).execute()) {
@@ -270,6 +280,38 @@ public class GoldAccountService {
         return Map.of("success", true, "completedCount", completedChances, "actualWeight", actualWeight, "orderNos", orderNos);
     }
 
+    private String goldToken(int userId, int id) {
+        List<String> tokens = db.query("SELECT token FROM gold_account WHERE user_id=? AND id=?",
+            (rs, ignored) -> rs.getString("token"), userId, id);
+        if (tokens.isEmpty()) throw error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在");
+        String token = tokens.get(0);
+        if (token == null || token.isBlank()) throw error(HttpStatus.CONFLICT, "GOLD_ACCOUNT_NOT_LOGGED_IN", "Gold账号尚未登录");
+        return token;
+    }
+
+    public JsonNode sellAllGrabcoin(int userId, int id) {
+        return call("/api/grabcoin/order/sell-all-v2", null, goldToken(userId, id), true).path("data");
+    }
+
+    private String encryptGoldPassword(String password) {
+        if (password == null || password.isBlank()) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "请输入支付密码");
+        try {
+            byte[] bytes = password.getBytes(StandardCharsets.UTF_8);
+            if (bytes.length > 245) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "支付密码过长");
+            var key = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(GOLD_PUBLIC_KEY)));
+            var cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            cipher.init(Cipher.ENCRYPT_MODE, key);
+            return Base64.getEncoder().encodeToString(cipher.doFinal(bytes));
+        } catch (com.goldpricemonitor.api.ApiFault e) { throw e; }
+        catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "GOLD_PASSWORD_ENCRYPTION_FAILED", "支付密码加密失败"); }
+    }
+
+    public JsonNode sellGrabcoinOrder(int userId, int id, int orderId, String password) {
+        if (orderId <= 0) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "订单ID无效");
+        String token = goldToken(userId, id);
+        return call("/api/grabcoin/order/sell-v2", Map.of("orderId", orderId, "passWord", encryptGoldPassword(password)), token).path("data");
+    }
+
     public Map<String,Object> grabcoin(int userId) {
         LocalDate today = LocalDate.now(GOLD_ZONE);
         List<Map<String,Object>> accounts = new ArrayList<>();
@@ -299,6 +341,7 @@ public class GoldAccountService {
                         item.put("accountId", id);
                         item.put("username", account.get("username"));
                         item.put("orderNo", order.path("orderNo").asText(""));
+                        item.put("orderId", order.path("id").asInt(0));
                         item.put("goldPrice", order.get("goldPrice").numberValue());
                         item.put("totalWeight", order.path("totalWeight").isNumber() ? order.get("totalWeight").numberValue() : null);
                         item.put("createTime", order.path("createTime").asText(""));

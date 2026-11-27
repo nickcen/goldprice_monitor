@@ -47,4 +47,8 @@ See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret 
 
 `POST /api/v1/me/gold-accounts/{id}/grabcoin/sell` 接收 `{ "weight": 1 }`。服务端只从今天创建且仍有效的气泡中选择克重合计恰好等于请求克数的组合，再逐个调用 Gold 的按编号挂卖接口。返回 `success`、已完成气泡数 `completedCount`、实际挂卖克重 `actualWeight` 和 `orderNos`；上游中途失败时返回 `success: false` 和错误信息，已完成的挂卖不会撤销。请求需要本产品 USER token，账号需已登录 Gold。
 
+`POST /api/v1/me/gold-accounts/{id}/grabcoin/sell-all` 无请求体，调用 Gold 的 `POST /api/grabcoin/order/sell-all-v2`，返回 Gold 的挂卖结果（`count`、`totalWeight`、`orderNos` 等）。
+
+`POST /api/v1/me/gold-accounts/{id}/grabcoin/order/sell` 接收 `{ "orderId": 123, "passWord": "支付密码" }`，将支付密码按 Gold 客户端公钥 RSA 加密后调用 `POST /api/grabcoin/order/sell-v2`。这两个接口均要求本产品 USER token 和已登录的关联 Gold 账号。
+
 外部 Gold 服务地址通过 `APP_PRICE_SERVER_BASE_URL` 配置。服务端调用 `/api/User/SendSms` 与 `/api/User/LoginByPhoneAndCode`，当前适配器要求返回 `status: true`，登录响应还需包含 `data.token`。缺少 token 时账号不会变为在线。正式接入前需用服务提供方的响应样例核对该契约。

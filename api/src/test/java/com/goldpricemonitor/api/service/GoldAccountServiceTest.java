@@ -17,6 +17,44 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GoldAccountServiceTest {
+    @Test void sellAllAndSellOrderUseOwnedTokenAndEncryptedPassword() throws Exception {
+        JdbcDataSource source = new JdbcDataSource();
+        source.setURL("jdbc:h2:mem:gold_sell_actions_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
+        JdbcTemplate db = new JdbcTemplate(source);
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> payload = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/grabcoin/order/sell-all-v2", exchange -> {
+            assertEquals("POST", exchange.getRequestMethod());
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            byte[] response = "{\"status\":true,\"data\":{\"completedCount\":1}}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.createContext("/api/grabcoin/order/sell-v2", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            payload.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] response = "{\"status\":true,\"data\":{\"sold\":true}}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.start();
+        try {
+            GoldAccountService service = new GoldAccountService(db, "http://127.0.0.1:" + server.getAddress().getPort());
+            int id = (int) service.create(1, "account", null).get("id");
+            assertThrows(ApiFault.class, () -> service.sellAllGrabcoin(2, id));
+            assertThrows(ApiFault.class, () -> service.sellAllGrabcoin(1, id));
+            db.update("UPDATE gold_account SET token=? WHERE id=?", "gold-token", id);
+            assertEquals(1, service.sellAllGrabcoin(1, id).path("completedCount").asInt());
+            assertThrows(ApiFault.class, () -> service.sellGrabcoinOrder(1, id, 0, "123456"));
+            assertThrows(ApiFault.class, () -> service.sellGrabcoinOrder(1, id, 12, ""));
+            assertTrue(service.sellGrabcoinOrder(1, id, 12, "123456").path("sold").asBoolean());
+            assertEquals("Bearer gold-token", authorization.get());
+            var body = new com.fasterxml.jackson.databind.ObjectMapper().readTree(payload.get());
+            assertEquals(12, body.path("orderId").asInt());
+            assertNotEquals("123456", body.path("passWord").asText());
+            assertFalse(body.path("passWord").asText().isBlank());
+        } finally { server.stop(0); }
+    }
     @Test void sellGrabcoinUsesOnlyTodayBubblesAndExactWeight() throws Exception {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_sell_today_test;MODE=MySQL;DB_CLOSE_DELAY=-1");

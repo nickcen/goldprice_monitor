@@ -28,6 +28,7 @@ async function logout(id: number) { if (busy.value) return; busy.value = true; t
   <ElCard class="gold-accounts">
     <template #header>
       <div class="gold-heading">
+        <h2>账号管理</h2>
         <ElButton type="primary" @click="openAccount()">新增账号</ElButton>
       </div>
     </template>

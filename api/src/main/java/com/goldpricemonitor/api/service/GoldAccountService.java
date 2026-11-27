@@ -94,8 +94,12 @@ public class GoldAccountService {
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址无效");
         try {
             JsonNode result = http.post().uri(uri).body(payload).retrieve().body(JsonNode.class);
-            if (result == null || !result.isObject() || !result.path("status").asBoolean())
-                throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_REJECTED", "Gold服务拒绝请求");
+            if (result == null || !result.isObject())
+                throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务返回无效响应");
+            if (!result.path("status").asBoolean()) {
+                String message = result.path("msg").asText("Gold服务拒绝请求");
+                throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_REJECTED", message.isBlank() ? "Gold服务拒绝请求" : message);
+            }
             return result;
         } catch (com.goldpricemonitor.api.ApiFault e) { throw e; }
         catch (RestClientException e) { throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败"); }

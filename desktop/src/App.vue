@@ -26,7 +26,7 @@ const props = defineProps<{ state: { page: 'restoring' | 'login' | 'register' | 
       <div class="brand-mark" aria-hidden="true">◆</div>
       <ElMenu class="sidebar-menu" :default-active="state.page" @select="selectMenu">
         <ElMenuItem
-          v-for="item in [{ page: 'home', icon: '⌂', label: '首页' }, { page: 'gold', icon: '◆', label: 'Gold账号' }, { page: 'account', icon: '◉', label: '账户' }] as const"
+          v-for="item in [{ page: 'home', icon: '⌂', label: '首页' }, { page: 'gold', icon: '◆', label: '账号' }, { page: 'account', icon: '◉', label: '我的' }] as const"
           :key="item.page" :index="item.page" :aria-current="state.page === item.page ? 'page' : undefined">
           <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span><span class="nav-label">{{ item.label
             }}</span>
@@ -34,11 +34,11 @@ const props = defineProps<{ state: { page: 'restoring' | 'login' | 'register' | 
       </ElMenu>
     </nav>
     <div class="content">
-      <header v-if="state.page !== 'gold'" class="page-header">
+      <header v-if="state.page === 'home'" class="page-header">
         <div><span class="eyebrow">GOLDPRICE MONITOR</span>
-          <h1>{{ state.page === 'home' ? '首页' : state.page === 'gold' ? 'Gold账号' : '账户' }}</h1>
+          <h1>首页</h1>
         </div>
-        <ElButton v-if="state.page === 'home'" class="secondary" @click="actions.logout">登出</ElButton>
+        <ElButton class="secondary" @click="actions.logout">登出</ElButton>
       </header>
       <HomePage v-if="state.page === 'home'" :config="state.config" :price="state.price" :price-error="state.priceError"
         :message="state.message" :points="state.points" :history-day="state.historyDay"

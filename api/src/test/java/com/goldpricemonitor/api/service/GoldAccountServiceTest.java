@@ -4,6 +4,8 @@ import com.goldpricemonitor.api.ApiFault;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.h2.jdbcx.JdbcDataSource;
@@ -16,7 +18,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_password_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         AtomicReference<String> request = new AtomicReference<>();
         AtomicReference<String> requestContentLength = new AtomicReference<>();
         AtomicBoolean accepted = new AtomicBoolean(false);
@@ -30,7 +32,7 @@ class GoldAccountServiceTest {
         server.createContext("/api/User/GetLoginByUserName", exchange -> {
             requestContentLength.set(exchange.getRequestHeaders().getFirst("Content-Length"));
             request.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));
-            byte[] response = (accepted.get() ? "{\"status\":true,\"data\":{\"token\":\"password-token\"}}" : "{\"status\":false,\"msg\":\"验证码错误\"}").getBytes(StandardCharsets.UTF_8);
+            byte[] response = (accepted.get() ? "{\"status\":true,\"data\":{\"token\":\"" + jwt() + "\"}}" : "{\"status\":false,\"msg\":\"验证码错误\"}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type","application/json"); exchange.sendResponseHeaders(200,response.length);
             exchange.getResponseBody().write(response); exchange.close();
         });
@@ -49,7 +51,8 @@ class GoldAccountServiceTest {
             assertTrue(request.get().contains("\"userName\":\"account\""));
             assertTrue(request.get().contains("\"password\":\"secret\""));
             assertTrue(request.get().contains("\"cachkey\":\"key-1\""));
-            assertEquals("password-token",db.queryForObject("SELECT token FROM gold_account WHERE id=?",String.class,id));
+            assertEquals(jwt(),db.queryForObject("SELECT token FROM gold_account WHERE id=?",String.class,id));
+            assertEquals("2030-01-01T00:00:00Z",service.get(1,id).get("validUntil"));
             assertFalse(service.get(1,id).containsKey("password"));
         } finally { server.stop(0); }
     }
@@ -57,7 +60,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_remote_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         AtomicReference<String> sms = new AtomicReference<>(), login = new AtomicReference<>();
         AtomicBoolean rejectLogin = new AtomicBoolean(true);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
@@ -70,7 +73,7 @@ class GoldAccountServiceTest {
         });
         server.createContext("/api/User/LoginByPhoneAndCode", exchange -> {
             login.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));
-            byte[] response = (rejectLogin.get() ? "{\"status\":false,\"msg\":\"验证码错误\",\"data\":null}" : "{\"status\":true,\"data\":{\"token\":\"gold-token\"}}").getBytes(StandardCharsets.UTF_8);
+            byte[] response = (rejectLogin.get() ? "{\"status\":false,\"msg\":\"验证码错误\",\"data\":null}" : "{\"status\":true,\"data\":{\"token\":\"" + jwt() + "\"}}").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type","application/json");
             exchange.sendResponseHeaders(200,response.length);
             exchange.getResponseBody().write(response); exchange.close();
@@ -88,7 +91,8 @@ class GoldAccountServiceTest {
             rejectLogin.set(false);
             service.login(1,id,"13800138000","123456");
             assertTrue(login.get().contains("\"loginType\":2"));
-            assertEquals("gold-token",db.queryForObject("SELECT token FROM gold_account WHERE id=?",String.class,id));
+            assertEquals(jwt(),db.queryForObject("SELECT token FROM gold_account WHERE id=?",String.class,id));
+            assertEquals("2030-01-01T00:00:00Z",service.list(1).get(0).get("validUntil"));
             assertTrue((boolean)service.get(1,id).get("isOnline"));
         } finally { server.stop(0); }
     }
@@ -96,18 +100,31 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         GoldAccountService service = new GoldAccountService(db, "");
         int id = (int) service.create(1,"first","plain-password").get("id");
         assertEquals(0,db.queryForObject("SELECT is_online FROM gold_account WHERE id=?",Integer.class,id));
         assertFalse(service.get(1,id).containsKey("password"));
+        assertEquals("plain-password", service.getForEdit(1,id).get("password"));
+        assertThrows(ApiFault.class, () -> service.getForEdit(2,id));
         assertThrows(ApiFault.class,() -> service.get(2,id));
         assertThrows(ApiFault.class,() -> service.sendSms(2,id,"13800138000"));
         service.update(1,id,"second",null,false);
         assertEquals("plain-password",db.queryForObject("SELECT password FROM gold_account WHERE id=?",String.class,id));
         assertEquals("second",service.get(1,id).get("username"));
+        db.update("UPDATE gold_account SET token=?,valid_until=?,is_online=1 WHERE id=?", jwt(), java.sql.Timestamp.from(Instant.parse("2030-01-01T00:00:00Z")), id);
+        assertThrows(ApiFault.class, () -> service.logout(2,id));
+        assertTrue((boolean) service.get(1,id).get("isOnline"));
+        service.logout(1,id);
+        assertNull(db.queryForObject("SELECT token FROM gold_account WHERE id=?", String.class, id));
+        assertNull(service.get(1,id).get("validUntil"));
+        assertFalse((boolean) service.get(1,id).get("isOnline"));
         assertThrows(ApiFault.class,() -> service.delete(2,id));
         service.delete(1,id);
         assertThrows(ApiFault.class,() -> service.get(1,id));
+    }
+    private static String jwt() {
+        String payload = Base64.getUrlEncoder().withoutPadding().encodeToString("{\"exp\":1893456000}".getBytes(StandardCharsets.UTF_8));
+        return "eyJhbGciOiJub25lIn0." + payload + ".signature";
     }
 }

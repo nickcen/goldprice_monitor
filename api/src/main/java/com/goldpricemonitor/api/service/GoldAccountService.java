@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
+import java.sql.Timestamp;
 import java.util.*;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -39,16 +41,27 @@ public class GoldAccountService {
         out.put("id", rs.getInt("id"));
         out.put("username", rs.getString("username"));
         out.put("isOnline", rs.getInt("is_online") == 1);
+        Timestamp validUntil = rs.getTimestamp("valid_until");
+        out.put("validUntil", validUntil == null ? null : validUntil.toInstant().toString());
         return out;
     }
 
     public List<Map<String,Object>> list(int userId) {
-        return db.query("SELECT id,username,is_online FROM gold_account WHERE user_id=? ORDER BY id DESC", this::row, userId);
+        return db.query("SELECT id,username,is_online,valid_until FROM gold_account WHERE user_id=? ORDER BY id DESC", this::row, userId);
     }
 
     public Map<String,Object> get(int userId, int id) {
-        return db.query("SELECT id,username,is_online FROM gold_account WHERE user_id=? AND id=?", this::row, userId, id)
+        return db.query("SELECT id,username,is_online,valid_until FROM gold_account WHERE user_id=? AND id=?", this::row, userId, id)
             .stream().findFirst().orElseThrow(() -> error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在"));
+    }
+
+    public Map<String,Object> getForEdit(int userId, int id) {
+        return db.query("SELECT id,username,is_online,valid_until,password FROM gold_account WHERE user_id=? AND id=?", (rs, rowNum) -> {
+            Map<String,Object> account = row(rs, rowNum);
+            account.put("password", rs.getString("password"));
+            return account;
+        }, userId, id).stream().findFirst()
+            .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在"));
     }
 
     private String username(String value) {
@@ -89,6 +102,12 @@ public class GoldAccountService {
     public void delete(int userId, int id) {
         if (db.update("DELETE FROM gold_account WHERE user_id=? AND id=?", userId, id) == 0)
             throw error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在");
+    }
+
+    public Map<String,Object> logout(int userId, int id) {
+        if (db.update("UPDATE gold_account SET token=NULL,valid_until=NULL,is_online=0 WHERE user_id=? AND id=?", userId, id) == 0)
+            throw error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在");
+        return get(userId, id);
     }
 
     private JsonNode call(String path, Map<String,Object> payload) {
@@ -140,7 +159,7 @@ public class GoldAccountService {
         JsonNode token = result.path("data").path("token");
         if (!token.isTextual() || token.asText().isBlank())
             throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回token");
-        db.update("UPDATE gold_account SET token=?,is_online=1 WHERE user_id=? AND id=?", token.asText(), userId, id);
+        db.update("UPDATE gold_account SET token=?,valid_until=?,is_online=1 WHERE user_id=? AND id=?", token.asText(), validUntil(token.asText()), userId, id);
         return get(userId, id);
     }
 
@@ -158,7 +177,7 @@ public class GoldAccountService {
         JsonNode token = result.path("data").path("token");
         if (!token.isTextual() || token.asText().isBlank())
             throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回token");
-        if (db.update("UPDATE gold_account SET token=?,is_online=1 WHERE user_id=? AND id=?", token.asText(), userId, id) == 0)
+        if (db.update("UPDATE gold_account SET token=?,valid_until=?,is_online=1 WHERE user_id=? AND id=?", token.asText(), validUntil(token.asText()), userId, id) == 0)
             throw error(HttpStatus.NOT_FOUND,"GOLD_ACCOUNT_NOT_FOUND","Gold账号不存在");
         return get(userId,id);
     }
@@ -167,5 +186,17 @@ public class GoldAccountService {
         if (value == null || !value.matches("(?:1[3-9]\\d{9}|\\+[1-9]\\d{7,14})"))
             throw error(HttpStatus.BAD_REQUEST,"INVALID_PARAMETER","手机号格式无效");
         return value;
+    }
+
+    private Timestamp validUntil(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return null;
+            JsonNode payload = mapper.readTree(Base64.getUrlDecoder().decode(parts[1]));
+            JsonNode exp = payload.path("exp");
+            return exp.isIntegralNumber() ? Timestamp.from(Instant.ofEpochSecond(exp.longValue())) : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

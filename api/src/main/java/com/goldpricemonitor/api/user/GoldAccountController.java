@@ -1,0 +1,27 @@
+package com.goldpricemonitor.api.user;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.goldpricemonitor.api.service.AuthService;
+import com.goldpricemonitor.api.service.GoldAccountService;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.*;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/me/gold-accounts")
+public class GoldAccountController {
+    private final AuthService auth;
+    private final GoldAccountService accounts;
+    public GoldAccountController(AuthService auth, GoldAccountService accounts) { this.auth=auth; this.accounts=accounts; }
+    public record AccountInput(String username,String password) {}
+    public record LoginInput(String mobile,String code) {}
+    @GetMapping public List<Map<String,Object>> list(HttpServletRequest request) { return accounts.list(auth.user(request).id()); }
+    @GetMapping("/{id}") public Map<String,Object> get(HttpServletRequest request,@PathVariable int id) { return accounts.get(auth.user(request).id(),id); }
+    @PostMapping public Map<String,Object> create(HttpServletRequest request,@RequestBody AccountInput body) { return accounts.create(auth.user(request).id(),body.username(),body.password()); }
+    @PatchMapping("/{id}") public Map<String,Object> update(HttpServletRequest request,@PathVariable int id,@RequestBody JsonNode body) {
+        return accounts.update(auth.user(request).id(),id,body.path("username").asText(null),body.path("password").asText(null),body.has("password"));
+    }
+    @DeleteMapping("/{id}") public Map<String,Object> delete(HttpServletRequest request,@PathVariable int id) { accounts.delete(auth.user(request).id(),id); return Map.of("success",true); }
+    @PostMapping("/{id}/send-sms") public Map<String,Object> sendSms(HttpServletRequest request,@PathVariable int id,@RequestBody LoginInput body) { return accounts.sendSms(auth.user(request).id(),id,body.mobile()); }
+    @PostMapping("/{id}/login") public Map<String,Object> login(HttpServletRequest request,@PathVariable int id,@RequestBody LoginInput body) { return accounts.login(auth.user(request).id(),id,body.mobile(),body.code()); }
+}

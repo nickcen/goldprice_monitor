@@ -131,7 +131,7 @@ async function submitAuth(event: Event): Promise<void> {
   } catch (error) { message = errorText(error); }
   render();
 }
-async function loadConfig(): Promise<void> {
+async function loadConfig(updateAccountView = true): Promise<void> {
   const requestId = ++configRequest;
   try {
     const next = await authorized<Config>('/api/v1/me/config');
@@ -144,7 +144,9 @@ async function loadConfig(): Promise<void> {
     if (changed) monitor.start(next);
   }
   catch (error) { if (requestId !== configRequest) return; configError = errorText(error); }
-  render();
+  // A focus-triggered refresh can finish between pointerdown and click. Replacing
+  // the form then discards the pending submit event and the user's input.
+  if (updateAccountView || page !== 'account') render();
 }
 async function saveConfig(event: Event): Promise<void> {
   event.preventDefault();
@@ -172,7 +174,7 @@ async function saveConfig(event: Event): Promise<void> {
 }
 window.addEventListener('focus', () => void resume());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void resume(); });
-async function resume(): Promise<void> { await session.check(); if (session.token && (page === 'home' || page === 'account')) { await loadConfig(); await maintainHistory(); } }
+async function resume(): Promise<void> { await session.check(); if (session.token && (page === 'home' || page === 'account')) { await loadConfig(false); await maintainHistory(); } }
 void trayStatus('未登录');
 render();
 if (!setupError) void session.restore().then(ok => { page = ok ? 'home' : 'login'; if (ok) void loadConfig(); else render(); }).catch(() => { page = 'login'; message = '无法读取系统凭据，请检查钥匙串权限'; render(); });

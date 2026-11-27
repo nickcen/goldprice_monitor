@@ -28,7 +28,7 @@ management:
       exposure:
         include: health
 app:
-  price-server-base-url: http://127.0.0.1:2016
+  price-server-base-url: http://127.0.0.1:2015
   admin-username: ${APP_ADMIN_USERNAME:}
   admin-password: ${APP_ADMIN_PASSWORD:}
   price-source-url: ${APP_PRICE_SOURCE_URL:${app.price-server-base-url}/api/Accumulate/GetRealTimeGoldPrice}

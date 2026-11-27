@@ -14,6 +14,8 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +26,7 @@ import static com.goldpricemonitor.api.service.ApiSupport.error;
 
 @Service
 public class GoldAccountService {
+    private static final Logger log = LoggerFactory.getLogger(GoldAccountService.class);
     private static final ZoneId GOLD_ZONE = ZoneId.of("Asia/Shanghai");
     private final JdbcTemplate db;
     private final OkHttpClient http;
@@ -122,6 +125,11 @@ public class GoldAccountService {
         URI uri = URI.create(baseUrl + path);
         if (!Set.of("http", "https").contains(uri.getScheme()))
             throw error(HttpStatus.SERVICE_UNAVAILABLE, "GOLD_SERVICE_UNCONFIGURED", "Gold服务地址无效");
+        String method = payload == null ? "GET" : "POST";
+        String endpoint = uri.getPath();
+        String requestId = UUID.randomUUID().toString();
+        long started = System.nanoTime();
+        log.info("Gold request requestId={} method={} endpoint={}", requestId, method, endpoint);
         try {
             Request.Builder request = new Request.Builder().url(uri.toString());
             if (token != null) request.header("Authorization", "Bearer " + token);
@@ -129,18 +137,39 @@ public class GoldAccountService {
             else request.post(RequestBody.create(mapper.writeValueAsBytes(payload), okhttp3.MediaType.get("application/json; charset=utf-8")));
             JsonNode result;
             try (Response response = http.newCall(request.build()).execute()) {
-                if (!response.isSuccessful()) throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败");
+                if (!response.isSuccessful()) {
+                    log.warn("Gold response requestId={} method={} endpoint={} httpStatus={} elapsedMs={}",
+                        requestId, method, endpoint, response.code(), (System.nanoTime() - started) / 1_000_000);
+                    throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败");
+                }
                 result = response.body() == null ? null : mapper.readTree(response.body().byteStream());
             }
-            if (result == null || !result.isObject())
+            if (result == null || !result.isObject()) {
+                log.warn("Gold response requestId={} method={} endpoint={} invalidBody=true elapsedMs={}",
+                    requestId, method, endpoint, (System.nanoTime() - started) / 1_000_000);
                 throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务返回无效响应");
+            }
+            JsonNode data = result.path("data");
+            if ("/api/grabcoin/chances/bubbles".equals(endpoint))
+                log.info("Gold response requestId={} method={} endpoint={} accepted={} bubbles={} sellableCount={} elapsedMs={}",
+                    requestId, method, endpoint, result.path("status").asBoolean(),
+                    data.path("bubbles").isArray() ? data.path("bubbles").size() : -1,
+                    data.path("sellableCount").isNumber() ? data.path("sellableCount").asInt() : -1,
+                    (System.nanoTime() - started) / 1_000_000);
+            else
+                log.info("Gold response requestId={} method={} endpoint={} accepted={} elapsedMs={}",
+                    requestId, method, endpoint, result.path("status").asBoolean(), (System.nanoTime() - started) / 1_000_000);
             if (!result.path("status").asBoolean()) {
                 String message = result.path("msg").asText("Gold服务拒绝请求");
                 throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_REJECTED", message.isBlank() ? "Gold服务拒绝请求" : message);
             }
             return result;
         } catch (com.goldpricemonitor.api.ApiFault e) { throw e; }
-        catch (IOException e) { throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败"); }
+        catch (IOException e) {
+            log.warn("Gold request failed requestId={} method={} endpoint={} errorType={} elapsedMs={}",
+                requestId, method, endpoint, e.getClass().getSimpleName(), (System.nanoTime() - started) / 1_000_000);
+            throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_ERROR", "Gold服务请求失败");
+        }
     }
 
     public Map<String,Object> sellable(int userId, int id) {
@@ -172,6 +201,8 @@ public class GoldAccountService {
         result.put("soldWeight", data.path("soldWeight").isNumber() ? data.get("soldWeight").numberValue() : 0);
         result.put("remainingSellableCount", remainingToday);
         result.put("remainingSellableWeight", remainingWeightToday);
+        log.info("Gold sellable userId={} accountId={} returnedBubbles={} remainingToday={} remainingWeightToday={}",
+            userId, id, data.get("bubbles").size(), remainingToday, remainingWeightToday);
         return result;
     }
 

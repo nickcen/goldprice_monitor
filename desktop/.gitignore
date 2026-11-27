@@ -3,6 +3,8 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.development
+!.env.production
 src-tauri/target/
 src-tauri/gen/schemas/
 src-tauri/.tauri/

@@ -27,3 +27,5 @@ npm run tauri build
 ```
 
 构建产物在 `src-tauri/target/release/bundle/`。Windows 与 macOS 均需实机验证托盘、通知和凭据库。自动更新的签名及发布配置留待后续任务。
+
+Gold账号入口位于桌面端左侧栏。账号的新增、修改、删除和验证码登录都经由本产品 API；需要 API 配置外部 Gold 服务地址。密码按需求明文存储，桌面端不会重新显示已保存的密码。

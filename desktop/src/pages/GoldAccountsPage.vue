@@ -6,7 +6,7 @@ import { formatDateTime } from '../dateTime';
 type Account = { id: number; username: string; isOnline: boolean; validUntil: string | null };
 const props = defineProps<{ request: <T>(path: string, options?: { method?: string; body?: unknown }) => Promise<T> }>();
 const rows = ref<Account[]>([]), message = ref(''), editing = ref<number | null>(null), accountModal = ref(false), loginId = ref<number | null>(null), captcha = ref<{ base64str: string; cachkey: string } | null>(null), busy = ref(false);
-const username = ref(''), password = ref(''), code = ref('');
+const username = ref(''), password = ref(''), paymentPassword = ref(''), code = ref('');
 const pageSize = 10;
 const currentPage = ref(1);
 const visibleRows = computed(() => rows.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize));
@@ -14,9 +14,9 @@ const errorText = (e: unknown) => e instanceof ApiError && e.response && typeof 
 const captchaSrc = () => captcha.value?.base64str.startsWith('data:image/') ? captcha.value.base64str : `data:image/png;base64,${captcha.value?.base64str ?? ''}`;
 async function load() { try { rows.value = await props.request<Account[]>('/api/v1/me/gold-accounts'); currentPage.value = Math.min(currentPage.value, Math.max(1, Math.ceil(rows.value.length / pageSize))); message.value = ''; } catch (e) { message.value = errorText(e); } }
 onMounted(() => void load());
-async function openAccount(row?: Account) { message.value = ''; if (!row) { editing.value = null; username.value = ''; password.value = ''; accountModal.value = true; return; } try { const account = await props.request<Account & { password: string | null }>(`/api/v1/me/gold-accounts/${row.id}`); editing.value = row.id; username.value = account.username; password.value = account.password ?? ''; accountModal.value = true; } catch (e) { message.value = errorText(e); } }
+async function openAccount(row?: Account) { message.value = ''; if (!row) { editing.value = null; username.value = ''; password.value = ''; paymentPassword.value = ''; accountModal.value = true; return; } try { const account = await props.request<Account & { password: string | null; paymentPassword: string | null }>(`/api/v1/me/gold-accounts/${row.id}`); editing.value = row.id; username.value = account.username; password.value = account.password ?? ''; paymentPassword.value = account.paymentPassword ?? ''; accountModal.value = true; } catch (e) { message.value = errorText(e); } }
 function closeAccount() { editing.value = null; accountModal.value = false; message.value = ''; }
-async function save() { if (busy.value) return; busy.value = true; try { const name = username.value.trim(); await props.request(editing.value === null ? '/api/v1/me/gold-accounts' : `/api/v1/me/gold-accounts/${editing.value}`, { method: editing.value === null ? 'POST' : 'PATCH', body: editing.value === null || password.value ? { username: name, password: password.value } : { username: name } }); closeAccount(); await load(); message.value = '已保存'; } catch (e) { message.value = errorText(e); } finally { busy.value = false; } }
+async function save() { if (busy.value) return; busy.value = true; try { const name = username.value.trim(); const body: Record<string, string> = { username: name }; if (editing.value === null || password.value) body.password = password.value; if (editing.value === null || paymentPassword.value) body.paymentPassword = paymentPassword.value; await props.request(editing.value === null ? '/api/v1/me/gold-accounts' : `/api/v1/me/gold-accounts/${editing.value}`, { method: editing.value === null ? 'POST' : 'PATCH', body }); closeAccount(); await load(); message.value = '已保存'; } catch (e) { message.value = errorText(e); } finally { busy.value = false; } }
 async function remove(id: number) { if (busy.value) return; try { await ElMessageBox.confirm('确定删除此Gold账号？', '确认删除', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }); } catch { return; } busy.value = true; try { await props.request(`/api/v1/me/gold-accounts/${id}`, { method: 'DELETE' }); await load(); } catch (e) { message.value = errorText(e); } finally { busy.value = false; } }
 function openLogin(id: number) { loginId.value = id; captcha.value = null; code.value = ''; message.value = ''; void refreshCaptcha(); }
 function closeLogin() { loginId.value = null; captcha.value = null; }
@@ -77,6 +77,9 @@ async function logout(id: number) { if (busy.value) return; busy.value = true; t
         </label><label>密码
           <ElInput v-model="password" type="text" :maxlength="255" autocomplete="off"
             :placeholder="editing === null ? '可选' : '未设置密码'" />
+        </label><label>支付密码
+          <ElInput v-model="paymentPassword" type="password" show-password :maxlength="255" autocomplete="off"
+            :placeholder="editing === null ? '可选' : '未设置支付密码'" />
         </label>
         <div>
           <ElButton native-type="submit" type="primary" :disabled="busy">{{ editing === null ? '新增账号' : '保存修改' }}

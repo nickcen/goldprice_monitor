@@ -13,21 +13,21 @@ public class GoldAccountController {
     private final AuthService auth;
     private final GoldAccountService accounts;
     public GoldAccountController(AuthService auth, GoldAccountService accounts) { this.auth=auth; this.accounts=accounts; }
-    public record AccountInput(String username,String password) {}
+    public record AccountInput(String username,String password,String paymentPassword) {}
     public record LoginInput(String mobile,String code) {}
     public record PasswordLoginInput(String code,String cachkey) {}
     public record SellInput(java.math.BigDecimal weight) {}
-    public record SellOrderInput(int orderId, String passWord) {}
+    public record SellOrderInput(int orderId) {}
     @GetMapping public List<Map<String,Object>> list(HttpServletRequest request) { return accounts.list(auth.user(request).id()); }
     @GetMapping("/grabcoin") public Map<String,Object> grabcoin(HttpServletRequest request) { return accounts.grabcoin(auth.user(request).id()); }
     @GetMapping("/{id}") public Map<String,Object> get(HttpServletRequest request,@PathVariable int id) { return accounts.getForEdit(auth.user(request).id(),id); }
     @GetMapping("/{id}/sellable") public Map<String,Object> sellable(HttpServletRequest request,@PathVariable int id) { return accounts.sellable(auth.user(request).id(),id); }
     @PostMapping("/{id}/grabcoin/sell") public Map<String,Object> sellGrabcoin(HttpServletRequest request,@PathVariable int id,@RequestBody SellInput body) { return accounts.sellGrabcoin(auth.user(request).id(),id,body.weight()); }
     @PostMapping("/{id}/grabcoin/sell-all") public JsonNode sellAllGrabcoin(HttpServletRequest request,@PathVariable int id) { return accounts.sellAllGrabcoin(auth.user(request).id(),id); }
-    @PostMapping("/{id}/grabcoin/order/sell") public JsonNode sellGrabcoinOrder(HttpServletRequest request,@PathVariable int id,@RequestBody SellOrderInput body) { return accounts.sellGrabcoinOrder(auth.user(request).id(),id,body.orderId(),body.passWord()); }
-    @PostMapping public Map<String,Object> create(HttpServletRequest request,@RequestBody AccountInput body) { return accounts.create(auth.user(request).id(),body.username(),body.password()); }
+    @PostMapping("/{id}/grabcoin/order/sell") public JsonNode sellGrabcoinOrder(HttpServletRequest request,@PathVariable int id,@RequestBody SellOrderInput body) { return accounts.sellGrabcoinOrder(auth.user(request).id(),id,body.orderId()); }
+    @PostMapping public Map<String,Object> create(HttpServletRequest request,@RequestBody AccountInput body) { return accounts.create(auth.user(request).id(),body.username(),body.password(),body.paymentPassword()); }
     @PatchMapping("/{id}") public Map<String,Object> update(HttpServletRequest request,@PathVariable int id,@RequestBody JsonNode body) {
-        return accounts.update(auth.user(request).id(),id,body.path("username").asText(null),body.path("password").asText(null),body.has("password"));
+        return accounts.update(auth.user(request).id(),id,body.path("username").asText(null),body.path("password").asText(null),body.has("password"),body.path("paymentPassword").asText(null),body.has("paymentPassword"));
     }
     @DeleteMapping("/{id}") public Map<String,Object> delete(HttpServletRequest request,@PathVariable int id) { accounts.delete(auth.user(request).id(),id); return Map.of("success",true); }
     @PostMapping("/{id}/send-sms") public Map<String,Object> sendSms(HttpServletRequest request,@PathVariable int id,@RequestBody LoginInput body) { return accounts.sendSms(auth.user(request).id(),id,body.mobile()); }

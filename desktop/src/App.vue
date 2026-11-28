@@ -48,6 +48,14 @@ const props = defineProps<{ state: { page: 'restoring' | 'login' | 'register' | 
 </template>
 
 <style scoped>
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+}
+
 .sidebar-menu {
   width: 100%;
   border-right: 0;

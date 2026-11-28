@@ -31,7 +31,6 @@ const actionError = ref('');
 const actingAccount = ref<number | null>(null);
 const actingOrder = ref<number | null>(null);
 const orderToSell = ref<Order | null>(null);
-const payPassword = ref('');
 function openSell(account: Account) {
   sellAccount.value = account;
   sellWeight.value = undefined;
@@ -80,14 +79,13 @@ function message(e: unknown, fallback: string) {
 }
 async function submitOrderSell() {
   const order = orderToSell.value;
-  if (!order || !payPassword.value.trim()) { actionError.value = '请输入支付密码'; return; }
+  if (!order) return;
   actingOrder.value = order.orderId;
   actionError.value = '';
   try {
     await props.request(`/api/v1/me/gold-accounts/${order.accountId}/grabcoin/order/sell`,
-      { method: 'POST', body: { orderId: order.orderId, passWord: payPassword.value } });
+      { method: 'POST', body: { orderId: order.orderId } });
     orderToSell.value = null;
-    payPassword.value = '';
     ElMessage.success('权益订单已卖出');
     await load();
   } catch (e) { actionError.value = message(e, '卖出失败'); }
@@ -150,10 +148,9 @@ onMounted(() => void load());
         <ElTableColumn label="操作" min-width="100"><template #default="{ row }: { row: Order }"><ElButton type="primary" :disabled="!row.orderId" @click="orderToSell = row; actionError = ''">卖出</ElButton></template></ElTableColumn>
       </ElTable>
     </ElCard>
-    <ElDialog :model-value="orderToSell !== null" :title="`卖出权益订单 · ${orderToSell?.orderNo ?? ''}`" width="420px" :close-on-click-modal="actingOrder === null" :show-close="actingOrder === null" @close="orderToSell = null; payPassword = ''">
-      <label for="pay-password">Gold 支付密码</label>
-      <ElInput id="pay-password" v-model="payPassword" type="password" show-password autocomplete="off" style="margin-top:10px" />
-      <template #footer><ElButton :disabled="actingOrder !== null" @click="orderToSell = null; payPassword = ''">取消</ElButton><ElButton type="primary" :loading="actingOrder !== null" @click="submitOrderSell">确认卖出</ElButton></template>
+    <ElDialog :model-value="orderToSell !== null" :title="`卖出权益订单 · ${orderToSell?.orderNo ?? ''}`" width="420px" :close-on-click-modal="actingOrder === null" :show-close="actingOrder === null" @close="orderToSell = null">
+      <p>确认卖出该权益订单？</p>
+      <template #footer><ElButton :disabled="actingOrder !== null" @click="orderToSell = null">取消</ElButton><ElButton type="primary" :loading="actingOrder !== null" @click="submitOrderSell">确认卖出</ElButton></template>
     </ElDialog>
   </section>
 </template>

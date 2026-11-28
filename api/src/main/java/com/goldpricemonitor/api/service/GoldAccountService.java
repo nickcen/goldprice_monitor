@@ -67,9 +67,10 @@ public class GoldAccountService {
     }
 
     public Map<String,Object> getForEdit(int userId, int id) {
-        return db.query("SELECT id,username,is_online,valid_until,password FROM gold_account WHERE user_id=? AND id=?", (rs, rowNum) -> {
+        return db.query("SELECT id,username,is_online,valid_until,password,payment_password FROM gold_account WHERE user_id=? AND id=?", (rs, rowNum) -> {
             Map<String,Object> account = row(rs, rowNum);
             account.put("password", rs.getString("password"));
+            account.put("paymentPassword", rs.getString("payment_password"));
             return account;
         }, userId, id).stream().findFirst()
             .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在"));
@@ -88,25 +89,28 @@ public class GoldAccountService {
     }
 
     @Transactional
-    public Map<String,Object> create(int userId, String username, String password) {
+    public Map<String,Object> create(int userId, String username, String password, String paymentPassword) {
         String name = username(username);
         String secret = password(password);
+        String paymentSecret = password(paymentPassword);
         var key = new GeneratedKeyHolder();
         db.update(connection -> {
-            var statement = connection.prepareStatement("INSERT INTO gold_account(user_id,username,password) VALUES(?,?,?)", java.sql.Statement.RETURN_GENERATED_KEYS);
+            var statement = connection.prepareStatement("INSERT INTO gold_account(user_id,username,password,payment_password) VALUES(?,?,?,?)", java.sql.Statement.RETURN_GENERATED_KEYS);
             statement.setInt(1, userId);
             statement.setString(2, name);
             statement.setString(3, secret);
+            statement.setString(4, paymentSecret);
             return statement;
         }, key);
         return get(userId, Objects.requireNonNull(key.getKey()).intValue());
     }
 
     @Transactional
-    public Map<String,Object> update(int userId, int id, String username, String password, boolean replacePassword) {
+    public Map<String,Object> update(int userId, int id, String username, String password, boolean replacePassword, String paymentPassword, boolean replacePaymentPassword) {
         get(userId, id);
-        if (replacePassword) db.update("UPDATE gold_account SET username=?,password=? WHERE user_id=? AND id=?", username(username), password(password), userId, id);
-        else db.update("UPDATE gold_account SET username=? WHERE user_id=? AND id=?", username(username), userId, id);
+        db.update("UPDATE gold_account SET username=? WHERE user_id=? AND id=?", username(username), userId, id);
+        if (replacePassword) db.update("UPDATE gold_account SET password=? WHERE user_id=? AND id=?", password(password), userId, id);
+        if (replacePaymentPassword) db.update("UPDATE gold_account SET payment_password=? WHERE user_id=? AND id=?", password(paymentPassword), userId, id);
         return get(userId, id);
     }
 
@@ -306,8 +310,11 @@ public class GoldAccountService {
         catch (Exception e) { throw error(HttpStatus.INTERNAL_SERVER_ERROR, "GOLD_PASSWORD_ENCRYPTION_FAILED", "支付密码加密失败"); }
     }
 
-    public JsonNode sellGrabcoinOrder(int userId, int id, int orderId, String password) {
+    public JsonNode sellGrabcoinOrder(int userId, int id, int orderId) {
         if (orderId <= 0) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "订单ID无效");
+        String password = db.query("SELECT payment_password FROM gold_account WHERE user_id=? AND id=?", rs ->
+            rs.next() ? rs.getString("payment_password") : null, userId, id);
+        if (password == null || password.isBlank()) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "请先设置 Gold 支付密码");
         String token = goldToken(userId, id);
         return call("/api/grabcoin/order/sell-v2", Map.of("orderId", orderId, "passWord", encryptGoldPassword(password)), token).path("data");
     }

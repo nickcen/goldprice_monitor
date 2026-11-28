@@ -17,11 +17,41 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GoldAccountServiceTest {
+    @Test void balancesUseOwnedTokensAndKeepOtherAccountsWhenOneFails() throws Exception {
+        JdbcDataSource source = new JdbcDataSource();
+        source.setURL("jdbc:h2:mem:gold_balances_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
+        JdbcTemplate db = new JdbcTemplate(source);
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/User/GetUserInfo", exchange -> {
+            assertEquals("POST", exchange.getRequestMethod());
+            String token = exchange.getRequestHeaders().getFirst("Authorization");
+            byte[] response = ("Bearer good-token".equals(token)
+                ? "{\"status\":true,\"data\":{\"balance\":12.34}}"
+                : "{\"status\":false,\"msg\":\"expired\"}").getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        server.start();
+        try {
+            GoldAccountService service = new GoldAccountService(db, "http://127.0.0.1:" + server.getAddress().getPort(), "12345678901234567890123456789012");
+            int good = (int) service.create(1, "good", null, null).get("id");
+            int bad = (int) service.create(1, "bad", null, null).get("id");
+            int other = (int) service.create(2, "other", null, null).get("id");
+            db.update("UPDATE gold_account SET token=? WHERE id=?", "good-token", good);
+            db.update("UPDATE gold_account SET token=? WHERE id=?", "bad-token", bad);
+            db.update("UPDATE gold_account SET token=? WHERE id=?", "good-token", other);
+            var balances = service.balances(1);
+            assertEquals(2, balances.size());
+            assertEquals(bad, balances.get(0).get("id"));
+            assertNull(balances.get(0).get("balance"));
+            assertEquals(new java.math.BigDecimal("12.34"), balances.get(1).get("balance"));
+        } finally { server.stop(0); }
+    }
     @Test void sellAllAndSellOrderUseOwnedTokenAndEncryptedPassword() throws Exception {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_sell_actions_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         AtomicReference<String> authorization = new AtomicReference<>();
         AtomicReference<String> payload = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -39,7 +69,7 @@ class GoldAccountServiceTest {
         });
         server.start();
         try {
-            GoldAccountService service = new GoldAccountService(db, "http://127.0.0.1:" + server.getAddress().getPort());
+            GoldAccountService service = new GoldAccountService(db, "http://127.0.0.1:" + server.getAddress().getPort(), "12345678901234567890123456789012");
             int id = (int) service.create(1, "account", null, null).get("id");
             assertThrows(ApiFault.class, () -> service.sellAllGrabcoin(2, id));
             assertThrows(ApiFault.class, () -> service.sellAllGrabcoin(1, id));
@@ -48,7 +78,7 @@ class GoldAccountServiceTest {
             assertThrows(ApiFault.class, () -> service.sellGrabcoinOrder(1, id, 0));
             assertThrows(ApiFault.class, () -> service.sellGrabcoinOrder(2, id, 12));
             assertThrows(ApiFault.class, () -> service.sellGrabcoinOrder(1, id, 12));
-            db.update("UPDATE gold_account SET payment_password=? WHERE id=?", "123456", id);
+            service.update(1, id, "account", null, false, "123456", true);
             assertTrue(service.sellGrabcoinOrder(1, id, 12).path("sold").asBoolean());
             assertEquals("Bearer gold-token", authorization.get());
             var body = new com.fasterxml.jackson.databind.ObjectMapper().readTree(payload.get());
@@ -61,7 +91,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_sell_today_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
         AtomicReference<String> submitted = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
@@ -76,7 +106,7 @@ class GoldAccountServiceTest {
         });
         server.start();
         try {
-            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort(), "12345678901234567890123456789012");
             int id = (int) service.create(1,"account",null,null).get("id");
             db.update("UPDATE gold_account SET token=? WHERE id=?", "gold-token", id);
             assertThrows(ApiFault.class, () -> service.sellGrabcoin(2,id,new java.math.BigDecimal("1")));
@@ -92,7 +122,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_grabcoin_today_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/api/grabcoin/chances/bubbles", exchange -> {
@@ -112,7 +142,7 @@ class GoldAccountServiceTest {
         });
         server.start();
         try {
-            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort(), "12345678901234567890123456789012");
             int id = (int) service.create(1,"account",null,null).get("id");
             db.update("UPDATE gold_account SET token=?,is_online=1 WHERE id=?", "gold-token", id);
             Map<String,Object> result = service.grabcoin(1);
@@ -123,7 +153,7 @@ class GoldAccountServiceTest {
             assertThrows(ApiFault.class, () -> service.sellGrabcoinOrders(2, new java.math.BigDecimal("889")));
             assertThrows(ApiFault.class, () -> service.sellGrabcoinOrders(1, new java.math.BigDecimal("888")));
             assertNull(soldPayload.get());
-            db.update("UPDATE gold_account SET payment_password=? WHERE id=?", "123456", id);
+            service.update(1, id, "account", null, false, "123456", true);
             assertEquals(1, service.sellGrabcoinOrders(1, new java.math.BigDecimal("889.00")).get("completedCount"));
             assertTrue(soldPayload.get().contains("\"orderId\":12"));
         } finally { server.stop(0); }
@@ -132,7 +162,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_sellable_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         AtomicReference<String> authorization = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/api/grabcoin/chances/bubbles", exchange -> {
@@ -146,7 +176,7 @@ class GoldAccountServiceTest {
         });
         server.start();
         try {
-            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort(), "12345678901234567890123456789012");
             int id = (int) service.create(1,"account",null,null).get("id");
             assertThrows(ApiFault.class, () -> service.sellable(2,id));
             assertThrows(ApiFault.class, () -> service.sellable(1,id));
@@ -165,7 +195,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_password_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         AtomicReference<String> request = new AtomicReference<>();
         AtomicReference<String> requestContentLength = new AtomicReference<>();
         AtomicBoolean accepted = new AtomicBoolean(false);
@@ -185,7 +215,7 @@ class GoldAccountServiceTest {
         });
         server.start();
         try {
-            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort(), "12345678901234567890123456789012");
             int id = (int)service.create(1,"account","secret",null).get("id");
             assertThrows(ApiFault.class, () -> service.passwordCode(2,id));
             assertEquals("key-1", service.passwordCode(1,id).get("cachkey"));
@@ -207,7 +237,7 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_remote_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
         AtomicReference<String> sms = new AtomicReference<>(), login = new AtomicReference<>();
         AtomicBoolean rejectLogin = new AtomicBoolean(true);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
@@ -227,7 +257,7 @@ class GoldAccountServiceTest {
         });
         server.start();
         try {
-            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort());
+            GoldAccountService service = new GoldAccountService(db,"http://127.0.0.1:"+server.getAddress().getPort(), "12345678901234567890123456789012");
             int id = (int)service.create(1,"account",null,null).get("id");
             service.sendSms(1,id,"13800138000");
             assertTrue(sms.get().contains("\"messageEnum\":2"));
@@ -247,8 +277,8 @@ class GoldAccountServiceTest {
         JdbcDataSource source = new JdbcDataSource();
         source.setURL("jdbc:h2:mem:gold_test;MODE=MySQL;DB_CLOSE_DELAY=-1");
         JdbcTemplate db = new JdbcTemplate(source);
-        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(255),payment_password VARCHAR(255),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
-        GoldAccountService service = new GoldAccountService(db, "");
+        db.execute("CREATE TABLE gold_account (id INT AUTO_INCREMENT PRIMARY KEY,user_id INT,username VARCHAR(120),password VARCHAR(512),payment_password VARCHAR(512),salt VARCHAR(12),token VARCHAR(512),valid_until TIMESTAMP,is_online TINYINT DEFAULT 0)");
+        GoldAccountService service = new GoldAccountService(db, "", "12345678901234567890123456789012");
         int id = (int) service.create(1,"first","plain-password",null).get("id");
         assertEquals(0,db.queryForObject("SELECT is_online FROM gold_account WHERE id=?",Integer.class,id));
         assertFalse(service.get(1,id).containsKey("password"));
@@ -257,8 +287,8 @@ class GoldAccountServiceTest {
         assertThrows(ApiFault.class,() -> service.get(2,id));
         assertThrows(ApiFault.class,() -> service.sendSms(2,id,"13800138000"));
         service.update(1,id,"second",null,false,"654321",true);
-        assertEquals("plain-password",db.queryForObject("SELECT password FROM gold_account WHERE id=?",String.class,id));
-        assertEquals("654321",db.queryForObject("SELECT payment_password FROM gold_account WHERE id=?",String.class,id));
+        assertTrue(db.queryForObject("SELECT password FROM gold_account WHERE id=?",String.class,id).startsWith("v1:"));
+        assertTrue(db.queryForObject("SELECT payment_password FROM gold_account WHERE id=?",String.class,id).startsWith("v1:"));
         assertEquals("654321",service.getForEdit(1,id).get("paymentPassword"));
         assertFalse(service.get(1,id).containsKey("paymentPassword"));
         assertEquals("second",service.get(1,id).get("username"));

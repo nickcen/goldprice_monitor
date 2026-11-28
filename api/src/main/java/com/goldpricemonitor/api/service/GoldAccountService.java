@@ -21,6 +21,7 @@ import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -37,8 +38,12 @@ public class GoldAccountService {
     private final OkHttpClient http;
     private final String baseUrl;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final GoldCredentialCipher credentials;
 
-    public GoldAccountService(JdbcTemplate db, @Value("${app.price-server-base-url:}") String baseUrl) {
+    @Autowired
+    public GoldAccountService(JdbcTemplate db, @Value("${app.price-server-base-url:}") String baseUrl,
+                              @Value("${app.system-salt:}") String systemSalt) {
+        this.credentials = new GoldCredentialCipher(systemSalt);
         this.db = db;
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.http = new OkHttpClient.Builder()
@@ -61,16 +66,40 @@ public class GoldAccountService {
         return db.query("SELECT id,username,is_online,valid_until FROM gold_account WHERE user_id=? ORDER BY id DESC", this::row, userId);
     }
 
+    public List<Map<String,Object>> balances(int userId) {
+        List<Map<String,Object>> result = new ArrayList<>();
+        List<Map<String,Object>> accounts = db.query("SELECT id,token FROM gold_account WHERE user_id=? ORDER BY id DESC",
+            (rs, ignored) -> Map.of("id", rs.getInt("id"), "token", (Object) Optional.ofNullable(rs.getString("token")).orElse("")), userId);
+        for (Map<String,Object> account : accounts) {
+            int id = (int) account.get("id");
+            String token = (String) account.get("token");
+            Map<String,Object> balance = new LinkedHashMap<>();
+            balance.put("id", id);
+            balance.put("balance", null);
+            if (token != null && !token.isBlank()) {
+                try {
+                    JsonNode value = call("/api/User/GetUserInfo", null, token, true).path("data").path("balance");
+                    if (!value.isNumber()) throw error(HttpStatus.BAD_GATEWAY, "GOLD_SERVICE_RESPONSE", "Gold服务未返回余额");
+                    balance.put("balance", value.decimalValue());
+                } catch (com.goldpricemonitor.api.ApiFault e) {
+                    log.warn("Gold balance unavailable accountId={} errorType={}", id, e.getClass().getSimpleName());
+                }
+            }
+            result.add(balance);
+        }
+        return result;
+    }
+
     public Map<String,Object> get(int userId, int id) {
         return db.query("SELECT id,username,is_online,valid_until FROM gold_account WHERE user_id=? AND id=?", this::row, userId, id)
             .stream().findFirst().orElseThrow(() -> error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在"));
     }
 
     public Map<String,Object> getForEdit(int userId, int id) {
-        return db.query("SELECT id,username,is_online,valid_until,password,payment_password FROM gold_account WHERE user_id=? AND id=?", (rs, rowNum) -> {
+        return db.query("SELECT id,username,is_online,valid_until,password,payment_password,salt FROM gold_account WHERE user_id=? AND id=?", (rs, rowNum) -> {
             Map<String,Object> account = row(rs, rowNum);
-            account.put("password", rs.getString("password"));
-            account.put("paymentPassword", rs.getString("payment_password"));
+            account.put("password", credentials.decrypt(rs.getString("password"), rs.getString("salt")));
+            account.put("paymentPassword", credentials.decrypt(rs.getString("payment_password"), rs.getString("salt")));
             return account;
         }, userId, id).stream().findFirst()
             .orElseThrow(() -> error(HttpStatus.NOT_FOUND, "GOLD_ACCOUNT_NOT_FOUND", "Gold账号不存在"));
@@ -91,15 +120,17 @@ public class GoldAccountService {
     @Transactional
     public Map<String,Object> create(int userId, String username, String password, String paymentPassword) {
         String name = username(username);
-        String secret = password(password);
-        String paymentSecret = password(paymentPassword);
+        String salt = GoldCredentialCipher.newSalt();
+        String secret = credentials.encrypt(password(password), salt);
+        String paymentSecret = credentials.encrypt(password(paymentPassword), salt);
         var key = new GeneratedKeyHolder();
         db.update(connection -> {
-            var statement = connection.prepareStatement("INSERT INTO gold_account(user_id,username,password,payment_password) VALUES(?,?,?,?)", java.sql.Statement.RETURN_GENERATED_KEYS);
+            var statement = connection.prepareStatement("INSERT INTO gold_account(user_id,username,password,payment_password,salt) VALUES(?,?,?,?,?)", java.sql.Statement.RETURN_GENERATED_KEYS);
             statement.setInt(1, userId);
             statement.setString(2, name);
             statement.setString(3, secret);
             statement.setString(4, paymentSecret);
+            statement.setString(5, salt);
             return statement;
         }, key);
         return get(userId, Objects.requireNonNull(key.getKey()).intValue());
@@ -108,9 +139,10 @@ public class GoldAccountService {
     @Transactional
     public Map<String,Object> update(int userId, int id, String username, String password, boolean replacePassword, String paymentPassword, boolean replacePaymentPassword) {
         get(userId, id);
+        String salt = db.queryForObject("SELECT salt FROM gold_account WHERE user_id=? AND id=?", String.class, userId, id);
         db.update("UPDATE gold_account SET username=? WHERE user_id=? AND id=?", username(username), userId, id);
-        if (replacePassword) db.update("UPDATE gold_account SET password=? WHERE user_id=? AND id=?", password(password), userId, id);
-        if (replacePaymentPassword) db.update("UPDATE gold_account SET payment_password=? WHERE user_id=? AND id=?", password(paymentPassword), userId, id);
+        if (replacePassword) db.update("UPDATE gold_account SET password=? WHERE user_id=? AND id=?", credentials.encrypt(password(password), salt), userId, id);
+        if (replacePaymentPassword) db.update("UPDATE gold_account SET payment_password=? WHERE user_id=? AND id=?", credentials.encrypt(password(paymentPassword), salt), userId, id);
         return get(userId, id);
     }
 
@@ -312,8 +344,8 @@ public class GoldAccountService {
 
     public JsonNode sellGrabcoinOrder(int userId, int id, int orderId) {
         if (orderId <= 0) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "订单ID无效");
-        String password = db.query("SELECT payment_password FROM gold_account WHERE user_id=? AND id=?", rs ->
-            rs.next() ? rs.getString("payment_password") : null, userId, id);
+        String password = db.query("SELECT payment_password,salt FROM gold_account WHERE user_id=? AND id=?", rs ->
+            rs.next() ? credentials.decrypt(rs.getString("payment_password"), rs.getString("salt")) : null, userId, id);
         if (password == null || password.isBlank()) throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "请先设置 Gold 支付密码");
         String token = goldToken(userId, id);
         return call("/api/grabcoin/order/sell-v2", Map.of("orderId", orderId, "passWord", encryptGoldPassword(password)), token).path("data");
@@ -415,8 +447,8 @@ public class GoldAccountService {
         get(userId, id);
         if (code == null || code.isBlank() || cachkey == null || cachkey.isBlank())
             throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "图形验证码不能为空");
-        Map<String,Object> account = db.queryForMap("SELECT username,password FROM gold_account WHERE user_id=? AND id=?", userId, id);
-        String password = (String) account.get("password");
+        Map<String,Object> account = db.queryForMap("SELECT username,password,salt FROM gold_account WHERE user_id=? AND id=?", userId, id);
+        String password = credentials.decrypt((String) account.get("password"), (String) account.get("salt"));
         if (password == null || password.isBlank())
             throw error(HttpStatus.BAD_REQUEST, "GOLD_PASSWORD_MISSING", "请先为Gold账号设置密码");
         JsonNode result = call("/api/User/GetLoginByUserName", Map.of(

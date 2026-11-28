@@ -6,13 +6,16 @@ import { formatDateTime } from '../dateTime';
 type Account = { id: number; username: string; isOnline: boolean; validUntil: string | null };
 const props = defineProps<{ request: <T>(path: string, options?: { method?: string; body?: unknown }) => Promise<T> }>();
 const rows = ref<Account[]>([]), message = ref(''), editing = ref<number | null>(null), accountModal = ref(false), loginId = ref<number | null>(null), captcha = ref<{ base64str: string; cachkey: string } | null>(null), busy = ref(false);
+const balances = ref<Record<number, number | null>>({}), refreshing = ref(false);
 const username = ref(''), password = ref(''), paymentPassword = ref(''), code = ref('');
 const pageSize = 10;
 const currentPage = ref(1);
 const visibleRows = computed(() => rows.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize));
 const errorText = (e: unknown) => e instanceof ApiError && e.response && typeof e.response === 'object' && 'message' in e.response ? String(e.response.message) : e instanceof Error ? e.message : '操作失败';
 const captchaSrc = () => captcha.value?.base64str.startsWith('data:image/') ? captcha.value.base64str : `data:image/png;base64,${captcha.value?.base64str ?? ''}`;
-async function load() { try { rows.value = await props.request<Account[]>('/api/v1/me/gold-accounts'); currentPage.value = Math.min(currentPage.value, Math.max(1, Math.ceil(rows.value.length / pageSize))); message.value = ''; } catch (e) { message.value = errorText(e); } }
+async function load() { try { rows.value = await props.request<Account[]>('/api/v1/me/gold-accounts'); currentPage.value = Math.min(currentPage.value, Math.max(1, Math.ceil(rows.value.length / pageSize))); message.value = ''; await refreshBalances(); } catch (e) { message.value = errorText(e); } }
+async function refreshBalances() { if (refreshing.value) return; refreshing.value = true; try { const result = await props.request<{ id: number; balance: number | null }[]>('/api/v1/me/gold-accounts/balances'); balances.value = Object.fromEntries(result.map(item => [item.id, item.balance])); } catch (e) { message.value = errorText(e); } finally { refreshing.value = false; } }
+function formatBalance(id: number) { const value = balances.value[id]; return value == null ? '—' : `¥${Number(value).toFixed(2)}`; }
 onMounted(() => void load());
 async function openAccount(row?: Account) { message.value = ''; if (!row) { editing.value = null; username.value = ''; password.value = ''; paymentPassword.value = ''; accountModal.value = true; return; } try { const account = await props.request<Account & { password: string | null; paymentPassword: string | null }>(`/api/v1/me/gold-accounts/${row.id}`); editing.value = row.id; username.value = account.username; password.value = account.password ?? ''; paymentPassword.value = account.paymentPassword ?? ''; accountModal.value = true; } catch (e) { message.value = errorText(e); } }
 function closeAccount() { editing.value = null; accountModal.value = false; message.value = ''; }
@@ -29,12 +32,15 @@ async function logout(id: number) { if (busy.value) return; busy.value = true; t
     <template #header>
       <div class="gold-heading">
         <h2>账号管理</h2>
-        <ElButton type="primary" @click="openAccount()">新增账号</ElButton>
+        <div class="gold-heading-actions"><ElButton :loading="refreshing" @click="refreshBalances">刷新</ElButton><ElButton type="primary" @click="openAccount()">新增账号</ElButton></div>
       </div>
     </template>
     <p v-if="message" role="status">{{ message }}</p>
     <ElTable :data="visibleRows" row-key="id" style="width: 100%" empty-text="暂无账号">
       <ElTableColumn prop="username" label="账号" min-width="130" />
+      <ElTableColumn label="余额" min-width="105">
+        <template #default="{ row }: { row: Account }">{{ formatBalance(row.id) }}</template>
+      </ElTableColumn>
       <ElTableColumn label="有效期至" min-width="155">
         <template #default="{ row }: { row: Account }">{{ formatDateTime(row.validUntil) }}</template>
       </ElTableColumn>
@@ -55,6 +61,7 @@ async function logout(id: number) { if (busy.value) return; busy.value = true; t
     <div class="gold-account-cards">
       <div v-for="row in visibleRows" :key="row.id" class="gold-account-item">
         <strong>{{ row.username }}</strong>
+        <span>余额：{{ formatBalance(row.id) }}</span>
         <span>有效期至：{{ formatDateTime(row.validUntil) }}</span>
         <span>状态：{{ row.isOnline ? '在线' : '未在线' }}</span>
         <div class="gold-account-actions">

@@ -7,3 +7,4 @@ spring:
 app:
   jwt-secret: DnNd7lPLUI6kgBaBWqZFeTHcBHmvtVzL
   price-server-base-url: https://coinapi.gcsgcs.com
+  system-salt: ${APP_SYSTEM_SALT:4GAQiyb7wtYsKKoyA9QNhthFdckm59aZ}

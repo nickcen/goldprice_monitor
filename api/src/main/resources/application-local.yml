@@ -1,8 +1,10 @@
 spring:
+  config:
+    import: optional:file:../.env.local[.properties],optional:file:./.env.local[.properties]
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/goldprice_monitor?connectionTimeZone=UTC}
-    username: ${DB_USER:test}
-    password: ${DB_PASSWORD:test}
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 app:
-  jwt-secret: ${APP_JWT_SECRET:3dhReWTZ8yCJGSOaUlNjSlhBWUdOJ5jI}
+  jwt-secret: ${APP_JWT_SECRET}

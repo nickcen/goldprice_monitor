@@ -5,11 +5,6 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/goldprice_monitor?connectionTimeZone=UTC}
-    username: ${DB_USER:test}
-    password: ${DB_PASSWORD:test}
-    driver-class-name: com.mysql.cj.jdbc.Driver
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -31,7 +26,7 @@ app:
   price-server-base-url: http://127.0.0.1:2015
   admin-username: ${APP_ADMIN_USERNAME:}
   admin-password: ${APP_ADMIN_PASSWORD:}
-  system-salt: ${APP_SYSTEM_SALT:4GAQiyb7wtYsKKoyA9QNhthFdckm59aZ}
+  system-salt: ${APP_SYSTEM_SALT}
   price-source-url: ${APP_PRICE_SOURCE_URL:${app.price-server-base-url}/api/Accumulate/GetRealTimeGoldPrice}
   currency: ${APP_CURRENCY:CNY}
   unit: ${APP_PRICE_UNIT:gram}

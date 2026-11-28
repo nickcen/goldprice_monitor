@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Run Gold Price API",
+      "request": "launch",
+      "mainClass": "com.goldpricemonitor.api.ApiApplication",
+      "projectName": "api",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

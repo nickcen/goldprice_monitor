@@ -82,7 +82,7 @@ async function logout(id: number) { if (busy.value) return; busy.value = true; t
       <form @submit.prevent="save"><label>账号名
           <ElInput v-model="username" required :maxlength="120" />
         </label><label>密码
-          <ElInput v-model="password" type="text" :maxlength="255" autocomplete="off"
+          <ElInput v-model="password" type="password" show-password :maxlength="255" autocomplete="off"
             :placeholder="editing === null ? '可选' : '未设置密码'" />
         </label><label>支付密码
           <ElInput v-model="paymentPassword" type="password" show-password :maxlength="255" autocomplete="off"

@@ -4,7 +4,7 @@ Java 21、Spring Boot 3.5.6、MyBatis Spring Boot Starter 3.0.5、MySQL Connecto
 
 ## 环境
 
-安装 JDK 21、Maven 3.9+ 和 MySQL 8.0。创建 `goldprice_monitor` 数据库及权限受限的应用用户。默认启用 `local` profile，配置见 `application-local.yml`；本地连接参数可通过环境变量覆盖。可参考 `.env.example`；该文件不会被应用自动加载。生产环境由 systemd 设置 `SPRING_PROFILES_ACTIVE=prod`，读取 `application-prod.yml`，并通过 `/etc/goldprice-monitor.env` 提供数据库与 JWT 密钥，不要提交真实凭据。
+安装 JDK 21、Maven 3.9+ 和 MySQL 8.0。创建 `goldprice_monitor` 数据库及权限受限的应用用户。默认启用 `local` profile，`application-local.yml` 可从仓库根目录或 `api/` 目录加载根目录的 `.env.local`。可参照根目录的 `.env.example` 创建该文件。生产环境由 systemd 设置 `SPRING_PROFILES_ACTIVE=prod`，`application-prod.yml` 加载服务工作目录 `/opt/goldprice-monitor/.env.prod`；部署脚本将根目录的私有 `.env.prod` 复制到该位置并限制文件权限。两个文件均不提交到 Git；已部署的密钥和数据库密码如曾出现在版本历史中，应另行轮换。
 
 | 变量 | 用途 | 开发默认值 |
 | --- | --- | --- |
@@ -14,11 +14,11 @@ Java 21、Spring Boot 3.5.6、MyBatis Spring Boot Starter 3.0.5、MySQL Connecto
 
 ## 构建、测试与启动
 
-在 `api/` 目录执行：
+在仓库根目录执行：
 
 ```sh
-mvn clean verify
-mvn spring-boot:run
+mvn -f api/pom.xml clean verify
+mvn -f api/pom.xml spring-boot:run
 ```
 
 健康检查位于 `GET http://localhost:8080/actuator/health`，返回 Spring Boot 标准 JSON。数据库不可用时健康状态为 `DOWN`，这是预期行为。测试关闭数据库健康探测，以验证 HTTP 端点而无需外部 MySQL。生产环境应通过部署系统注入数据库凭据；不要把密码写入仓库或命令行。

@@ -1,10 +1,12 @@
 spring:
+  config:
+    import: file:./.env.prod[.properties]
   datasource:
-    url: jdbc:mysql://rm-2zeggg2nv4y9zr0m9.mysql.rds.aliyuncs.com:3306/goldprice_monitor?verifyServerCertificate=false&useSSL=false&requireSSL=false&autoReconnect=true&characterEncoding=utf8&characterSetResults=utf8&allowPublicKeyRetrieval=true&nullCatalogMeansCurrent=true
-    username: chidugaiyi
-    password: Chidu123
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 app:
-  jwt-secret: DnNd7lPLUI6kgBaBWqZFeTHcBHmvtVzL
+  jwt-secret: ${APP_JWT_SECRET}
   price-server-base-url: https://coinapi.gcsgcs.com
-  system-salt: ${APP_SYSTEM_SALT:4GAQiyb7wtYsKKoyA9QNhthFdckm59aZ}
+  system-salt: ${APP_SYSTEM_SALT}

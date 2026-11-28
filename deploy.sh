@@ -27,6 +27,7 @@ if [[ "$ACTION" == status ]]; then
   exit
 fi
 
+[[ -s "$ROOT/.env.prod" ]] || { echo "Production config missing or empty: $ROOT/.env.prod" >&2; exit 1; }
 for command in mvn npm rsync; do
   command -v "$command" >/dev/null || { echo "Missing local command: $command" >&2; exit 1; }
 done
@@ -53,6 +54,7 @@ REMOTE_CHECK
 RSYNC_SSH="ssh"
 for option in "${SSH[@]:1}"; do printf -v RSYNC_SSH '%s %q' "$RSYNC_SSH" "$option"; done
 rsync -az "$JAR" -e "$RSYNC_SSH" "${REMOTE_USER}@${REMOTE_HOST}:${APP_ROOT}/api.jar.new"
+rsync -az --chmod=F600 "$ROOT/.env.prod" -e "$RSYNC_SSH" "${REMOTE_USER}@${REMOTE_HOST}:${APP_ROOT}/.env.prod.new"
 rsync -az --delete "$ROOT/admin/dist/" -e "$RSYNC_SSH" "${REMOTE_USER}@${REMOTE_HOST}:${WEB_ROOT}/"
 rsync -az "$ROOT/deploy/goldprice-monitor.service" -e "$RSYNC_SSH" "${REMOTE_USER}@${REMOTE_HOST}:/etc/systemd/system/${SERVICE}.service"
 rsync -az "$ROOT/deploy/goldprice-monitor.conf" -e "$RSYNC_SSH" "${REMOTE_USER}@${REMOTE_HOST}:/etc/nginx/conf.d/${SERVICE}.conf"
@@ -60,6 +62,8 @@ rsync -az "$ROOT/deploy/goldprice-monitor.conf" -e "$RSYNC_SSH" "${REMOTE_USER}@
 remote 'bash -s' <<'REMOTE_FINISH'
 set -euo pipefail
 mv /opt/goldprice-monitor/api.jar.new /opt/goldprice-monitor/api.jar
+mv /opt/goldprice-monitor/.env.prod.new /opt/goldprice-monitor/.env.prod
+chmod 600 /opt/goldprice-monitor/.env.prod
 systemctl daemon-reload
 nginx -t
 systemctl enable --now goldprice-monitor

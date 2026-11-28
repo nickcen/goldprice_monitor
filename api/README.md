@@ -51,4 +51,6 @@ See [API_CONTRACT.md](API_CONTRACT.md). Set `APP_JWT_SECRET` to a unique secret 
 
 `POST /api/v1/me/gold-accounts/{id}/grabcoin/order/sell` 接收 `{ "orderId": 123 }`，从当前用户关联的 Gold 账号读取已保存的 `payment_password`，按 Gold 客户端公钥 RSA 加密后调用 `POST /api/grabcoin/order/sell-v2`。这两个接口均要求本产品 USER token 和已登录的关联 Gold 账号。
 
+`POST /api/v1/me/gold-accounts/grabcoin/orders/sell` 接收 `{ "goldPrice": 883.17 }`，重新查询当前用户今天待卖出的订单，按挂单价匹配，并使用各订单所属账号的 token 和 `payment_password` 逐笔卖出。返回 `success`、`completedCount`、`totalCount` 和失败时的 `message`；中途失败不会撤销已卖出的订单。
+
 外部 Gold 服务地址通过 `APP_PRICE_SERVER_BASE_URL` 配置。服务端调用 `/api/User/SendSms` 与 `/api/User/LoginByPhoneAndCode`，当前适配器要求返回 `status: true`，登录响应还需包含 `data.token`。缺少 token 时账号不会变为在线。正式接入前需用服务提供方的响应样例核对该契约。

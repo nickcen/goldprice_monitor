@@ -101,7 +101,13 @@ class GoldAccountServiceTest {
         });
         server.createContext("/api/grabcoin/orders", exchange -> {
             assertTrue(exchange.getRequestURI().getQuery().contains("beginTime=" + today));
-            byte[] response = ("{\"status\":true,\"data\":{\"count\":2,\"list\":[{\"createTime\":\"" + today.minusDays(1) + "T12:00:00\",\"goldPrice\":888,\"totalWeight\":1},{\"createTime\":\"" + today + "T12:00:00\",\"goldPrice\":889,\"totalWeight\":1}]}}").getBytes(StandardCharsets.UTF_8);
+            byte[] response = ("{\"status\":true,\"data\":{\"count\":2,\"list\":[{\"id\":11,\"createTime\":\"" + today.minusDays(1) + "T12:00:00\",\"goldPrice\":888,\"totalWeight\":1},{\"id\":12,\"createTime\":\"" + today + "T12:00:00\",\"goldPrice\":889,\"totalWeight\":1}]}}").getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
+        });
+        AtomicReference<String> soldPayload = new AtomicReference<>();
+        server.createContext("/api/grabcoin/order/sell-v2", exchange -> {
+            soldPayload.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] response = "{\"status\":true,\"data\":{\"sold\":true}}".getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200,response.length); exchange.getResponseBody().write(response); exchange.close();
         });
         server.start();
@@ -114,6 +120,12 @@ class GoldAccountServiceTest {
             assertEquals(0, account.get("availableCount"));
             assertEquals(1, account.get("listedCount"));
             assertEquals(1, ((java.util.List<?>) result.get("orders")).size());
+            assertThrows(ApiFault.class, () -> service.sellGrabcoinOrders(2, new java.math.BigDecimal("889")));
+            assertThrows(ApiFault.class, () -> service.sellGrabcoinOrders(1, new java.math.BigDecimal("888")));
+            assertNull(soldPayload.get());
+            db.update("UPDATE gold_account SET payment_password=? WHERE id=?", "123456", id);
+            assertEquals(1, service.sellGrabcoinOrders(1, new java.math.BigDecimal("889.00")).get("completedCount"));
+            assertTrue(soldPayload.get().contains("\"orderId\":12"));
         } finally { server.stop(0); }
     }
     @Test void sellableUsesOwnedAccountTokenAndReturnsCurrentBubbleCount() throws Exception {

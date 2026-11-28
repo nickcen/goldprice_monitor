@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { ElButton, ElCard, ElDialog, ElInput, ElInputNumber, ElMessage, ElMessageBox, ElTable, ElTableColumn } from 'element-plus';
+import { ElButton, ElCard, ElDialog, ElForm, ElFormItem, ElInputNumber, ElMessage, ElRadio, ElRadioGroup, ElTable, ElTableColumn } from 'element-plus';
 import { ApiError } from '../api/client';
 
 type Account = { id: number; username: string; isOnline: boolean; availableCount?: number; listedCount?: number; error?: string };
@@ -9,43 +9,51 @@ const props = defineProps<{ request: <T>(path: string, options?: { method?: stri
 const accounts = ref<Account[]>([]);
 const orders = ref<Order[]>([]);
 const groupedOrders = computed(() => {
-  const groups = new Map<number, { goldPrice: number; count: number; usernames: Set<string>; totalWeight: number | null }>();
+  const groups = new Map<number, { goldPrice: number; count: number; totalWeight: number | null }>();
   for (const order of orders.value) {
-    const group = groups.get(order.goldPrice) ?? { goldPrice: order.goldPrice, count: 0, usernames: new Set<string>(), totalWeight: 0 };
+    const group = groups.get(order.goldPrice) ?? { goldPrice: order.goldPrice, count: 0, totalWeight: 0 };
     group.count++;
-    group.usernames.add(order.username);
     if (order.totalWeight === null) group.totalWeight = null;
     else if (group.totalWeight !== null) group.totalWeight += order.totalWeight;
     groups.set(order.goldPrice, group);
   }
-  return [...groups.values()].sort((a, b) => a.goldPrice - b.goldPrice)
-    .map(group => ({ ...group, usernames: [...group.usernames].join('、') }));
+  return [...groups.values()].sort((a, b) => a.goldPrice - b.goldPrice);
 });
 const loading = ref(false);
 const error = ref('');
 const selling = ref(false);
 const sellAccount = ref<Account | null>(null);
+const sellMode = ref<'all' | 'weight'>('all');
 const sellWeight = ref<number | undefined>(undefined);
 const sellError = ref('');
 const actionError = ref('');
-const actingAccount = ref<number | null>(null);
 const actingOrder = ref<number | null>(null);
-const orderToSell = ref<Order | null>(null);
+const priceToSell = ref<number | null>(null);
 function openSell(account: Account) {
   sellAccount.value = account;
+  sellMode.value = 'all';
   sellWeight.value = undefined;
   sellError.value = '';
 }
 async function submitSell() {
-  if (!sellAccount.value || !sellWeight.value || sellWeight.value <= 0) {
+  const account = sellAccount.value;
+  if (!account) return;
+  if (sellMode.value === 'weight' && (!sellWeight.value || sellWeight.value <= 0)) {
     sellError.value = '请输入大于 0 的克数';
     return;
   }
   selling.value = true;
   sellError.value = '';
   try {
+    if (sellMode.value === 'all') {
+      const result = await props.request<{ count?: number; totalWeight?: number }>(`/api/v1/me/gold-accounts/${account.id}/grabcoin/sell-all`, { method: 'POST' });
+      sellAccount.value = null;
+      ElMessage.success(`已挂卖 ${result.count ?? 0} 笔，共 ${result.totalWeight ?? 0}g`);
+      await load();
+      return;
+    }
     const result = await props.request<{ success: boolean; completedCount: number; actualWeight: number; message?: string }>(
-      `/api/v1/me/gold-accounts/${sellAccount.value.id}/grabcoin/sell`,
+      `/api/v1/me/gold-accounts/${account.id}/grabcoin/sell`,
       { method: 'POST', body: { weight: sellWeight.value } },
     );
     if (!result.success) {
@@ -56,37 +64,29 @@ async function submitSell() {
     sellAccount.value = null;
     await load();
   } catch (e) {
-    sellError.value = e instanceof ApiError && e.response && typeof e.response === 'object' && 'message' in e.response
-      ? String(e.response.message) : e instanceof Error ? e.message : '挂卖失败';
+    sellError.value = message(e, '挂卖失败');
     await load();
   } finally { selling.value = false; }
-}
-async function sellAll(account: Account) {
-  try { await ElMessageBox.confirm(`将 ${account.username} 的全部待挂卖气泡一键挂卖，确认继续？`, '一键挂卖', { type: 'warning' }); }
-  catch { return; }
-  actingAccount.value = account.id;
-  actionError.value = '';
-  try {
-    const result = await props.request<{ count?: number; totalWeight?: number }>(`/api/v1/me/gold-accounts/${account.id}/grabcoin/sell-all`, { method: 'POST' });
-    ElMessage.success(`已挂卖 ${result.count ?? 0} 笔，共 ${result.totalWeight ?? 0}g`);
-    await load();
-  } catch (e) { actionError.value = message(e, '一键挂卖失败'); }
-  finally { actingAccount.value = null; }
 }
 function message(e: unknown, fallback: string) {
   return e instanceof ApiError && e.response && typeof e.response === 'object' && 'message' in e.response
     ? String(e.response.message) : e instanceof Error ? e.message : fallback;
 }
 async function submitOrderSell() {
-  const order = orderToSell.value;
-  if (!order) return;
-  actingOrder.value = order.orderId;
+  const price = priceToSell.value;
+  if (price === null) return;
+  actingOrder.value = price;
   actionError.value = '';
   try {
-    await props.request(`/api/v1/me/gold-accounts/${order.accountId}/grabcoin/order/sell`,
-      { method: 'POST', body: { orderId: order.orderId } });
-    orderToSell.value = null;
-    ElMessage.success('权益订单已卖出');
+    const result = await props.request<{ success: boolean; completedCount: number; totalCount: number; message?: string }>(
+      '/api/v1/me/gold-accounts/grabcoin/orders/sell', { method: 'POST', body: { goldPrice: price } });
+    if (!result.success) {
+      actionError.value = `已卖出 ${result.completedCount}/${result.totalCount} 笔；${result.message || '卖出失败'}`;
+      await load();
+      return;
+    }
+    priceToSell.value = null;
+    ElMessage.success(`已卖出 ${result.completedCount} 笔权益订单`);
     await load();
   } catch (e) { actionError.value = message(e, '卖出失败'); }
   finally { actingOrder.value = null; }
@@ -108,49 +108,76 @@ onMounted(() => void load());
 
 <template>
   <section class="grabcoin-page">
-    <div class="page-header"><div><span class="eyebrow">GOLDPRICE MONITOR</span><h1>抢金币</h1></div>
+    <div class="page-header">
+      <div><span class="eyebrow">GOLDPRICE MONITOR</span>
+        <h1>抢金币</h1>
+      </div>
       <ElButton :loading="loading" @click="load">刷新</ElButton>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="actionError" class="error" role="alert">{{ actionError }}</p>
     <ElCard class="grabcoin-card">
-      <template #header><h2>今日关联账户挂单数</h2></template>
+      <template #header>
+        <h2>今日关联账户挂单数</h2>
+      </template>
       <ElTable v-loading="loading" :data="accounts" row-key="id" empty-text="暂无关联账户" style="width:100%">
-        <ElTableColumn prop="username" label="账号" min-width="140" />
-        <ElTableColumn label="今日可挂单数" min-width="110"><template #default="{ row }: { row: Account }">{{ row.availableCount ?? '—' }}</template></ElTableColumn>
-        <ElTableColumn label="今日已挂单数" min-width="110"><template #default="{ row }: { row: Account }">{{ row.listedCount ?? '—' }}</template></ElTableColumn>
-        <ElTableColumn label="状态" min-width="160"><template #default="{ row }: { row: Account }">{{ row.error || (row.isOnline ? '正常' : '未登录') }}</template></ElTableColumn>
-        <ElTableColumn label="操作" min-width="190"><template #default="{ row }: { row: Account }"><template v-if="row.isOnline && !row.error && (row.availableCount ?? 0) > 0"><ElButton type="primary" @click="openSell(row)">按克数挂卖</ElButton><ElButton :loading="actingAccount === row.id" @click="sellAll(row)">一键挂卖</ElButton></template></template></ElTableColumn>
+        <ElTableColumn prop="username" label="账号" min-width="130" />
+        <ElTableColumn label="已挂/可挂" min-width="105"><template #default="{ row }: { row: Account }">{{ row.listedCount
+          ?? '—' }}/{{ row.availableCount ?? '—' }}</template>
+        </ElTableColumn>
+        <ElTableColumn label="状态" min-width="90"><template #default="{ row }: { row: Account }">{{ row.error ||
+          (row.isOnline ? '正常' : '未登录') }}</template></ElTableColumn>
+        <ElTableColumn label="操作" min-width="100"><template #default="{ row }: { row: Account }">
+            <ElButton v-if="row.isOnline && !row.error && (row.availableCount ?? 0) > 0" type="primary"
+              @click="openSell(row)">卖出</ElButton>
+          </template>
+        </ElTableColumn>
       </ElTable>
     </ElCard>
-    <ElDialog :model-value="sellAccount !== null" :title="`挂卖 · ${sellAccount?.username ?? ''}`" width="420px" :close-on-click-modal="!selling" :close-on-press-escape="!selling" :show-close="!selling" @close="sellAccount = null">
-      <label for="sell-weight">挂卖克数</label>
-      <div style="margin-top: 10px"><ElInputNumber id="sell-weight" v-model="sellWeight" :min="0.0001" :precision="4" :step="1" controls-position="right" /></div>
+    <ElDialog :model-value="sellAccount !== null" title="卖出" width="420px" :close-on-click-modal="!selling"
+      :close-on-press-escape="!selling" :show-close="!selling" @close="sellAccount = null">
+      <ElForm label-position="top" @submit.prevent="submitSell">
+        <ElFormItem label="卖出方式">
+          <ElRadioGroup v-model="sellMode" :disabled="selling">
+            <ElRadio value="all">全部卖出</ElRadio>
+            <ElRadio value="weight">按克数</ElRadio>
+          </ElRadioGroup>
+        </ElFormItem>
+        <ElFormItem v-if="sellMode === 'weight'" label="挂卖克数">
+          <ElInputNumber v-model="sellWeight" :min="0.0001" :precision="4" :step="1"
+            controls-position="right" :disabled="selling" />
+        </ElFormItem>
+      </ElForm>
       <p v-if="sellError" class="error" role="alert">{{ sellError }}</p>
-      <template #footer><ElButton :disabled="selling" @click="sellAccount = null">取消</ElButton><ElButton type="primary" :loading="selling" :disabled="selling" @click="submitSell">确认挂卖</ElButton></template>
+      <template #footer>
+        <ElButton :disabled="selling" @click="sellAccount = null">取消</ElButton>
+        <ElButton type="primary" :loading="selling" :disabled="selling" @click="submitSell">确认卖出</ElButton>
+      </template>
     </ElDialog>
     <ElCard class="grabcoin-card">
-      <template #header><h2>今日所有账号挂单记录</h2></template>
+      <template #header>
+        <h2>今日待卖出权益订单</h2>
+      </template>
       <ElTable v-loading="loading" :data="groupedOrders" row-key="goldPrice" empty-text="暂无挂单记录" style="width:100%">
         <ElTableColumn prop="goldPrice" label="挂单价" min-width="110" />
         <ElTableColumn prop="count" label="数量" min-width="90" />
         <ElTableColumn prop="totalWeight" label="合计克重" min-width="110" />
-        <ElTableColumn prop="usernames" label="关联账号" min-width="180" />
+        <ElTableColumn label="操作" min-width="100"><template
+            #default="{ row }: { row: { goldPrice: number; count: number } }">
+            <ElButton type="primary" :disabled="!row.count" @click="priceToSell = row.goldPrice; actionError = ''">卖出
+            </ElButton>
+          </template>
+        </ElTableColumn>
       </ElTable>
     </ElCard>
-    <ElCard class="grabcoin-card">
-      <template #header><h2>今日待卖出权益订单</h2></template>
-      <ElTable v-loading="loading" :data="orders" row-key="orderId" empty-text="暂无待卖出订单" style="width:100%">
-        <ElTableColumn prop="username" label="账号" min-width="120" />
-        <ElTableColumn prop="orderNo" label="订单编号" min-width="180" />
-        <ElTableColumn prop="goldPrice" label="挂单价" min-width="110" />
-        <ElTableColumn prop="totalWeight" label="克重" min-width="90" />
-        <ElTableColumn label="操作" min-width="100"><template #default="{ row }: { row: Order }"><ElButton type="primary" :disabled="!row.orderId" @click="orderToSell = row; actionError = ''">卖出</ElButton></template></ElTableColumn>
-      </ElTable>
-    </ElCard>
-    <ElDialog :model-value="orderToSell !== null" :title="`卖出权益订单 · ${orderToSell?.orderNo ?? ''}`" width="420px" :close-on-click-modal="actingOrder === null" :show-close="actingOrder === null" @close="orderToSell = null">
-      <p>确认卖出该权益订单？</p>
-      <template #footer><ElButton :disabled="actingOrder !== null" @click="orderToSell = null">取消</ElButton><ElButton type="primary" :loading="actingOrder !== null" @click="submitOrderSell">确认卖出</ElButton></template>
+    <ElDialog :model-value="priceToSell !== null" :title="`卖出权益订单 · ${priceToSell ?? ''}`" width="420px"
+      :close-on-click-modal="actingOrder === null" :show-close="actingOrder === null" @close="priceToSell = null">
+      <p>确认卖出该挂单价下的 {{groupedOrders.find(group => group.goldPrice === priceToSell)?.count ?? 0}} 笔权益订单？</p>
+      <p v-if="actionError" class="error" role="alert">{{ actionError }}</p>
+      <template #footer>
+        <ElButton :disabled="actingOrder !== null" @click="priceToSell = null">取消</ElButton>
+        <ElButton type="primary" :loading="actingOrder !== null" @click="submitOrderSell">确认卖出</ElButton>
+      </template>
     </ElDialog>
   </section>
 </template>

@@ -319,6 +319,34 @@ public class GoldAccountService {
         return call("/api/grabcoin/order/sell-v2", Map.of("orderId", orderId, "passWord", encryptGoldPassword(password)), token).path("data");
     }
 
+    public Map<String,Object> sellGrabcoinOrders(int userId, java.math.BigDecimal goldPrice) {
+        if (goldPrice == null || goldPrice.signum() <= 0)
+            throw error(HttpStatus.BAD_REQUEST, "INVALID_PARAMETER", "挂单价无效");
+        @SuppressWarnings("unchecked")
+        List<Map<String,Object>> orders = (List<Map<String,Object>>) grabcoin(userId).get("orders");
+        List<Map<String,Object>> matching = orders.stream()
+            .filter(order -> new java.math.BigDecimal(order.get("goldPrice").toString()).compareTo(goldPrice) == 0)
+            .toList();
+        if (matching.isEmpty()) throw error(HttpStatus.CONFLICT, "GOLD_ORDERS_NOT_FOUND", "该挂单价下没有待卖出订单，请刷新列表");
+        int completed = 0;
+        String failure = null;
+        for (Map<String,Object> order : matching) {
+            try {
+                sellGrabcoinOrder(userId, (int) order.get("accountId"), (int) order.get("orderId"));
+                completed++;
+            } catch (com.goldpricemonitor.api.ApiFault e) {
+                failure = e.getMessage();
+                break;
+            }
+        }
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("completedCount", completed);
+        result.put("totalCount", matching.size());
+        result.put("success", failure == null);
+        result.put("message", failure);
+        return result;
+    }
+
     public Map<String,Object> grabcoin(int userId) {
         LocalDate today = LocalDate.now(GOLD_ZONE);
         List<Map<String,Object>> accounts = new ArrayList<>();

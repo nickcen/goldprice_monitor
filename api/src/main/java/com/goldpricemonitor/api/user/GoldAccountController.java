@@ -18,8 +18,10 @@ public class GoldAccountController {
     public record PasswordLoginInput(String code,String cachkey) {}
     public record SellInput(java.math.BigDecimal weight) {}
     public record SellOrderInput(int orderId) {}
+    public record SellPriceInput(java.math.BigDecimal goldPrice) {}
     @GetMapping public List<Map<String,Object>> list(HttpServletRequest request) { return accounts.list(auth.user(request).id()); }
     @GetMapping("/grabcoin") public Map<String,Object> grabcoin(HttpServletRequest request) { return accounts.grabcoin(auth.user(request).id()); }
+    @PostMapping("/grabcoin/orders/sell") public Map<String,Object> sellGrabcoinOrders(HttpServletRequest request,@RequestBody SellPriceInput body) { return accounts.sellGrabcoinOrders(auth.user(request).id(),body.goldPrice()); }
     @GetMapping("/{id}") public Map<String,Object> get(HttpServletRequest request,@PathVariable int id) { return accounts.getForEdit(auth.user(request).id(),id); }
     @GetMapping("/{id}/sellable") public Map<String,Object> sellable(HttpServletRequest request,@PathVariable int id) { return accounts.sellable(auth.user(request).id(),id); }
     @PostMapping("/{id}/grabcoin/sell") public Map<String,Object> sellGrabcoin(HttpServletRequest request,@PathVariable int id,@RequestBody SellInput body) { return accounts.sellGrabcoin(auth.user(request).id(),id,body.weight()); }
